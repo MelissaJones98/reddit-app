@@ -1,9 +1,9 @@
-#Codecademy Off-Platform Project: Reddit App
+# Codecademy Off-Platform Project: Reddit App
 
-##Description
+## Description
 A Reddit application using React and Redux. The application will allow users to view and search posts and comments provided by the API.
 
-##Features
+## Features
 - Users can use the application on any device (desktop to mobile)
 - Users can use the application on any modern browser
 - Users can access your application at a URL
@@ -15,15 +15,15 @@ A Reddit application using React and Redux. The application will allow users to 
 - Users are delighted with animations and transitions
 - Users are able to leave an error state
 
-##Wireframe
+## Wireframe
 ![Reddit App Wireframe](./redditApp.drawio.png)
 
-##How to Use
+## How to Use
 1.
 2.
 3.
 
-##Technologies
+## Technologies
 - React
 - Redux
 - Git/GitHub
@@ -36,22 +36,22 @@ A Reddit application using React and Redux. The application will allow users to 
 - Selenium
 - Command line and file navigation
 
-##Error Handling and Testing
+## Error Handling and Testing
 Implemented error handling for:
 - Error 1
 - Error 2
 - Error 3
 
-###Error 1
+### Error 1
 
 
-###Error 2
+### Error 2
 
 
-###Error 3
+### Error 3
 
 
-##Future Work
+## Future Work
 - Get a custom domain name and use it for your application
 - Set up a CI/CD workflow to automatically deploy your application when the master branch in the repository changes
 - Make your application a progressive web app
