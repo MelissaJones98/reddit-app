@@ -119,4 +119,64 @@ test('login button shows "Log out" after a successful sign up', async () => {
   // wait for the app to reflect the logged-in state
   expect(await screen.findByRole('button', { name: /log out/i })).toBeInTheDocument();
 });
+
+//Failure Case Tests
+// failure case 1: bad login
+test('shows an error when login fails with incorrect credentials', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  // confirm we're on the log in form
+  await user.click(screen.getByRole('button', { name: /log in/i }));
+
+  // fill in and submit the form with incorrect details
+  await user.type(screen.getByLabelText(/username/i), 'wronguser');
+  await user.type(screen.getByLabelText(/password/i), 'wrongpassword');
+  await user.click(screen.getByRole('button', { name: /submit/i }));
+
+  // error message appears
+  expect(await screen.findByText(/incorrect username or password/i)).toBeInTheDocument();
+
+  // button should NOT have changed to "Log out"
+  expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument();
+
+  // form should still be open so the user can retry
+  expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+});
+
+// failure case 2: bad sign up validation
+test('shows a validation error when sign up passwords do not match', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  await user.click(screen.getByRole('button', { name: /sign up/i }));
+
+  await user.type(screen.getByLabelText(/username/i), 'testuser');
+  await user.type(screen.getByLabelText(/email/i), 'testuser@example.com');
+  await user.type(screen.getByLabelText(/^password/i), 'password123');
+  await user.type(screen.getByLabelText(/confirm password/i), 'password456');
+  await user.click(screen.getByRole('button', { name: /submit/i }));
+
+  // validation error appears
+  expect(await screen.findByText(/passwords do not match/i)).toBeInTheDocument();
+
+  // user should not be logged in
+  expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument();
+
+  // form should still be open so the user can retry
+  expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
+});
 // -----------------------------------------------------------------------------------------------------------------------------------
