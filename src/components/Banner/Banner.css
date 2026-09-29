@@ -1,0 +1,27 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid #333;
+}
+
+.banner-logo {
+  flex: 0 0 auto;
+}
+
+.banner-search {
+  flex: 1 1 auto;
+}
+
+.banner-search input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.banner-auth {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+}

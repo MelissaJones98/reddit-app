@@ -8,7 +8,7 @@ import App from './App';
 // testing if the searchBar filters the page content based on user input into the input field
 test('filters items based on search input', async () => {
   const user = userEvent.setup(); // creates a "user" object to interact w/ the page
-  render(<App />); // renders the app in a fake browser environment - not the real browser
+  render(<App />); // renders the app in a fake browser environment - not the real browser (test environment)
 
   // all items visible initially
   expect(screen.getByText('Apple')).toBeInTheDocument();
