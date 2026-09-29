@@ -19,9 +19,8 @@ A Reddit application using React and Redux. The application will allow users to 
 ![Reddit App Wireframe](./redditApp.drawio.png)
 
 ## How to Use
-1.
-2.
-3.
+1. Run `npm install` on root
+2. Run `npm start` on root
 
 ## Technologies
 - React
@@ -38,18 +37,10 @@ A Reddit application using React and Redux. The application will allow users to 
 
 ## Error Handling and Testing
 Implemented error handling for:
-- Error 1
-- Error 2
-- Error 3
+- A bad login: an error is displayed when login fails due to incorrect credentials
+- A validation error on sign up form: an error is displayed when sign up passwords do not match
 
-### Error 1
-
-
-### Error 2
-
-
-### Error 3
-
+App.test.js is annotated. Please see that for further details on each individual test. 
 
 ## Future Work
 - Get a custom domain name and use it for your application
