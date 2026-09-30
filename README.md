@@ -1,7 +1,8 @@
 # Codecademy Off-Platform Project: Reddit App
 
 ## Description
-A Reddit application using React and Redux. The application will allow users to view and search posts and comments provided by the API.
+A Reddit clone application using React and Redux. The application will allow users to view and search posts and comments provided by the API.
+Please note that credit for any branding and the logo goes to Reddit. 
 
 ## Features
 - Users can use the application on any device (desktop to mobile)

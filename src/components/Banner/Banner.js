@@ -1,4 +1,5 @@
 import './Banner.css'; // imports banner stylesheet
+import logo from './logo.png';
 
 // "isLoggedIn" and "onLogoutClick" are props - the login status changes the btn text but the state itself lives higher up in App not in Banner, Banner just displays what it is told
 // "onSignUpClick" and "onLoginClick" are props NOT internal navigation
@@ -9,7 +10,7 @@ function Banner({ onSignUpClick, onLoginClick, isLoggedIn, onLogoutClick }) {
   return (
     <header className="banner">
       <div className="banner-logo">
-        <span>logo</span>
+        <img src={logo} alt="Logo"></img>
       </div>
 
       <div className="banner-search">
@@ -21,15 +22,15 @@ function Banner({ onSignUpClick, onLoginClick, isLoggedIn, onLogoutClick }) {
       </div>
 
       <div className="banner-auth">
-        <button aria-label="sign up" onClick={onSignUpClick}>
+        <button className="btn" aria-label="sign up" onClick={onSignUpClick}> {/* aria-label provides an accessible name which is read by screen readers */}
           Sign Up
         </button>
         {isLoggedIn ? (
-          <button aria-label="log out" onClick={onLogoutClick}>
+          <button className="btn" aria-label="log out" onClick={onLogoutClick}>
             Log Out
           </button>
         ) : (
-          <button aria-label="log in" onClick={onLoginClick}>
+          <button className="btn" aria-label="log in" onClick={onLoginClick}>
             Log In
           </button>
         )}

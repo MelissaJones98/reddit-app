@@ -11,8 +11,15 @@
   flex: 0 0 auto;
 }
 
+.banner-logo img {
+  height: 40px;
+  width: auto;
+}
+
 .banner-search {
   flex: 1 1 auto;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .banner-search input {
@@ -24,4 +31,16 @@
   flex: 0 0 auto;
   display: flex;
   gap: 8px;
+}
+
+.btn {
+  background-color: rgb(216, 108, 8);
+  border: 0.1rem;
+  border-color: rgb(216, 108, 8);
+  border-radius: 0.35rem ;
+  padding: 0.5rem;
+  width: 80px;
+  font-weight: bold;
+  font-size: 15px;
+  color: #23272B;
 }
