@@ -1,9 +1,53 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event'; // companion library that simulates how a real user interacts with a page: typing, clicking, tabbing, selecting etc
-import { MemoryRouter } from 'react-router-dom'; 
+import { MemoryRouter } from 'react-router-dom';
 // MemoryRouter provides React Router with the means to track the current "location" in a test environment in the same way that the window.history API does in a real browser.
-import Post from './Post';
+import Banner from './components/Banner/Banner';
+import LoginForm from './components/LoginForm/LoginForm';
+import SignUpForm from './components/SignUpForm/SignUpForm';
+import Post from './components/Post/Post';
+import PostFeed from './components/PostFeed/PostFeed';
 import App from './App';
+
+// mock data for testing as there isn't a backend yet ---------------------------------------------------------------------------------
+const mockPost = {
+  id: '1',
+  postedBy: 'testuser',
+  postHeading: 'My First Post',
+  content: 'This is the post content.',
+  likes: 0,
+  dislikes: 0,
+};
+
+// second mock objects with likes and dislikes already on the post
+const mockPostWithCounts = {
+  id: '2',
+  postedBy: 'testuser',
+  postHeading: 'A Popular Post',
+  content: 'This post already has some reactions.',
+  likes: 5,
+  dislikes: 2,
+};
+
+const mockPosts = [
+  {
+    id: '1',
+    postedBy: 'testuser',
+    postHeading: 'My First Post',
+    content: 'This is the first post.',
+    likes: 0,
+    dislikes: 0,
+  },
+  {
+    id: '2',
+    postedBy: 'anotheruser',
+    postHeading: 'A Second Post',
+    content: 'This is the second post.',
+    likes: 3,
+    dislikes: 1,
+  },
+];
+// -----------------------------------------------------------------------------------------------------------------------------------
 
 // searchBar Tests --------------------------------------------------------------------------------------------------------------------
 // testing if the searchBar filters the page content based on user input into the input field
@@ -183,16 +227,6 @@ test('shows a validation error when sign up passwords do not match', async () =>
 // -----------------------------------------------------------------------------------------------------------------------------------
 
 // post/post feed/detailed post tests ------------------------------------------------------------------------------------------------
-// mock data for testing as there isn't a backend yet
-const mockPost = {
-  id: '1',
-  postedBy: 'testuser',
-  postHeading: 'My First Post',
-  content: 'This is the post content.',
-  likes: 0,
-  dislikes: 0,
-};
-
 // test 1: basic rendering 
 // renders post with the mock data passed in as a prop, then checks username, heading and content text all appear on the page
 test('renders the post details', () => {
@@ -275,16 +309,6 @@ test('clicking Share copies the post link to the clipboard', async () => {
   );
 });
 
-// second mock objects with likes and dislikes already on the post
-const mockPostWithCounts = {
-  id: '2',
-  postedBy: 'testuser',
-  postHeading: 'A Popular Post',
-  content: 'This post already has some reactions.',
-  likes: 5,
-  dislikes: 2,
-};
-
 // test 7: considers there may already be likes/dislikes on a post before the user clicks the buttons
 // would catch bugs like " the count always resets to 1 instead of incrementing from whatever it started at"
 test('like and dislike counts start at the post\'s existing values and increment from there', async () => {
@@ -365,5 +389,34 @@ test('clicking Like after Dislike removes the dislike and adds a like instead', 
   await user.click(likeButton); // clicks like button and checks that dislike decremented by 1 and like incremented by 1
   expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument();
   expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument();
+});
+
+// test 12: basic multiplicity
+test('renders a Post for each item in the posts array', () => {
+  render(<PostFeed posts={mockPosts} />); // renders PostFeed with the two item array
+
+  expect(screen.getByText('My First Post')).toBeInTheDocument(); // checks BOTH headings appear on the page
+  expect(screen.getByText('A Second Post')).toBeInTheDocument();
+});
+
+// test 13: correct pairing of data
+// catches bugs like every post in the loop is accidentally displaying the last post's data instead of its own
+test('renders each post\'s own content, not mixed up with another post\'s', () => {
+  render(<PostFeed posts={mockPosts} />);
+
+  expect(screen.getByText('testuser')).toBeInTheDocument(); // checks testuser pairs with the first post's content
+  expect(screen.getByText('This is the first post.')).toBeInTheDocument();
+
+  expect(screen.getByText('anotheruser')).toBeInTheDocument(); // and another user pairs with the second post's data
+  expect(screen.getByText('This is the second post.')).toBeInTheDocument();
+  // this confirms that each post instance is really getting its onw data
+});
+
+// test 14: the empty state
+test('shows a message when there are no posts', () => {
+  render(<PostFeed posts={[]} />); // renders with an empty array instead of post data - simulating what happens before any posts exist or if a future API call returns nothing
+
+  expect(screen.getByText(/no posts/i)).toBeInTheDocument(); // checks for some text matching "no posts" (case-insensitive) 
+  // forces the component to handle the empty case deliberately - preventing what from a user's perspective looks like a broken page to an intentional "nothing here yet" message
 });
 // -----------------------------------------------------------------------------------------------------------------------------------

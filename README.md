@@ -40,6 +40,14 @@ Please note that credit for any branding and the logo goes to Reddit.
 Implemented error handling for:
 - A bad login: an error is displayed when login fails due to incorrect credentials
 - A validation error on sign up form: an error is displayed when sign up passwords do not match
+- Like/Dislike count resets to 1 every time the button is clicked
+- A user can add a like and a dislike at the same time
+    - clicking like then dislike removes the like and adds a dislike instead (and vice versa)
+- A user cannot add multiple likes/dislikes 
+    - a second click of the button removes the like/dislike
+- Every post in the feed isn't displaying the same data
+- No posts/ a future API call retuns nothing 
+    - an intentional "no posts" message for the user so page doesn't look broken
 
 App.test.js is annotated. Please see that for further details on each individual test. 
 
