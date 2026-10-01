@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event'; // companion library that simulates how a real user interacts with a page: typing, clicking, tabbing, selecting etc
 import { MemoryRouter } from 'react-router-dom'; 
 // MemoryRouter provides React Router with the means to track the current "location" in a test environment in the same way that the window.history API does in a real browser.
+import Post from './Post';
 import App from './App';
 
 // searchBar Tests --------------------------------------------------------------------------------------------------------------------
@@ -178,5 +179,191 @@ test('shows a validation error when sign up passwords do not match', async () =>
   expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
   expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
   expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+// post/post feed/detailed post tests ------------------------------------------------------------------------------------------------
+// mock data for testing as there isn't a backend yet
+const mockPost = {
+  id: '1',
+  postedBy: 'testuser',
+  postHeading: 'My First Post',
+  content: 'This is the post content.',
+  likes: 0,
+  dislikes: 0,
+};
+
+// test 1: basic rendering 
+// renders post with the mock data passed in as a prop, then checks username, heading and content text all appear on the page
+test('renders the post details', () => {
+  render(<Post post={mockPost} />);
+
+  expect(screen.getByText('testuser')).toBeInTheDocument();
+  expect(screen.getByText('My First Post')).toBeInTheDocument();
+  expect(screen.getByText('This is the post content.')).toBeInTheDocument();
+});
+
+// test 2: the four action buttons exist
+// checks all four buttons are present, each found by its accessible name
+test('renders Like, Dislike, Comments and Share buttons', () => {
+  render(<Post post={mockPost} />);
+
+  expect(screen.getByRole('button', { name: /like/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /dislike/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /comments/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
+});
+
+// test 3: clicking Like updates the displayed count
+// confirms the count starts at 0 - using { selector: '.like-count' } as a second argument to getByText narrows the search to only elements with that class
+test('clicking Like increments the like count', async () => {
+  const user = userEvent.setup();
+  render(<Post post={mockPost} />);
+
+  expect(screen.getByText('0', { selector: '.like-count' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /^like/i })); // checked with this unique identifer so two items aren't accidentally matched
+
+  expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument();
+});
+
+// test 4: clicking Dislike updates the displayed count
+// confirms the count starts at 0 and targets .dislike-count (doesnt need anchoring since dislike is the longer more specific string)
+test('clicking Dislike increments the dislike count', async () => {
+  const user = userEvent.setup();
+  render(<Post post={mockPost} />);
+
+  expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /dislike/i }));
+
+  expect(screen.getByText('1', { selector: '.dislike-count' })).toBeInTheDocument();
+});
+
+// test 5: commments opens a modal
+// first confirms no dialogue exists before anything is clicked (queryByRole since we are checking absence) 
+// after clicking comments it checks a dialog now exists with an accessible name matching the post's heading - this ties the opened modal to a specifc post
+test('clicking Comments opens the detailed post view', async () => {
+  const user = userEvent.setup();
+  render(<Post post={mockPost} />);
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /comments/i }));
+
+  expect(screen.getByRole('dialog', { name: /my first post/i })).toBeInTheDocument();
+});
+
+// test 6: share copies a link
+// copying to clipboard using a real browser API (navigator.clipboard.writeText) which doesn't exist in the test environment
+test('clicking Share copies the post link to the clipboard', async () => {
+  const user = userEvent.setup();
+
+  // mock the clipboard API, since jsdom doesn't implement it
+  Object.assign(navigator, {
+    clipboard: {
+      writeText: jest.fn(),
+    },
+  });
+
+  render(<Post post={mockPost} />);
+
+  await user.click(screen.getByRole('button', { name: /share/i }));
+
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+    expect.stringContaining('/post/1')
+  );
+});
+
+// second mock objects with likes and dislikes already on the post
+const mockPostWithCounts = {
+  id: '2',
+  postedBy: 'testuser',
+  postHeading: 'A Popular Post',
+  content: 'This post already has some reactions.',
+  likes: 5,
+  dislikes: 2,
+};
+
+// test 7: considers there may already be likes/dislikes on a post before the user clicks the buttons
+// would catch bugs like " the count always resets to 1 instead of incrementing from whatever it started at"
+test('like and dislike counts start at the post\'s existing values and increment from there', async () => {
+  const user = userEvent.setup();
+  render(<Post post={mockPostWithCounts} />);
+
+  // starts at the post's existing counts, not zero
+  expect(screen.getByText('5', { selector: '.like-count' })).toBeInTheDocument(); // checks the initial render - does the componenet correctly display the current counts?
+  expect(screen.getByText('2', { selector: '.dislike-count' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /^like/i }));
+  await user.click(screen.getByRole('button', { name: /dislike/i }));
+
+  // increments from the existing value, not from zero
+  expect(screen.getByText('6', { selector: '.like-count' })).toBeInTheDocument();
+  expect(screen.getByText('3', { selector: '.dislike-count' })).toBeInTheDocument();
+});
+
+// When the like and dislike buttons are clicked a second time the like or dislike that the user added should be removed. 
+// Also the user should only be able to add a like OR a dislike NOT both
+// test 8
+test('clicking Like a second time removes the like', async () => {
+  const user = userEvent.setup();
+  render(<Post post={mockPost} />);
+
+  const likeButton = screen.getByRole('button', { name: /^like/i }); // saves the current count to a variable
+
+  await user.click(likeButton);
+  expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument(); // checks the new count has been incremented by 1
+
+  await user.click(likeButton);
+  expect(screen.getByText('0', { selector: '.like-count' })).toBeInTheDocument(); // checks the new count has been decremented by 1
+});
+
+// test 9
+test('clicking Dislike a second time removes the dislike', async () => {
+  const user = userEvent.setup();
+  render(<Post post={mockPost} />);
+
+  const dislikeButton = screen.getByRole('button', { name: /dislike/i }); // saves the current count to a variable
+
+  await user.click(dislikeButton);
+  expect(screen.getByText('1', { selector: '.dislike-count' })).toBeInTheDocument(); // checks the new count has been incremented by 1
+
+  await user.click(dislikeButton);
+  expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument(); // checks the new count has been decremented by 1
+});
+
+// test 10
+test('clicking Dislike after Like removes the like and adds a dislike instead', async () => {
+  const user = userEvent.setup();
+  render(<Post post={mockPost} />);
+
+  const likeButton = screen.getByRole('button', { name: /^like/i }); // stores the current counts for both like and dislike in variables
+  const dislikeButton = screen.getByRole('button', { name: /dislike/i });
+
+  await user.click(likeButton); // clicks like button and checks that like incremented by 1
+  expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument();
+  expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument();
+
+  await user.click(dislikeButton); // clicks dislike button and checks that like decremented by 1 and dislike incremented by 1
+  expect(screen.getByText('0', { selector: '.like-count' })).toBeInTheDocument();
+  expect(screen.getByText('1', { selector: '.dislike-count' })).toBeInTheDocument();
+});
+
+// test 11
+test('clicking Like after Dislike removes the dislike and adds a like instead', async () => {
+  const user = userEvent.setup();
+  render(<Post post={mockPost} />);
+
+  const likeButton = screen.getByRole('button', { name: /^like/i }); // stores the current counts for both like and dislike in variables
+  const dislikeButton = screen.getByRole('button', { name: /dislike/i });
+
+  await user.click(dislikeButton); // clicks dislike button and checks that dislike incremented by 1
+  expect(screen.getByText('0', { selector: '.like-count' })).toBeInTheDocument();
+  expect(screen.getByText('1', { selector: '.dislike-count' })).toBeInTheDocument();
+
+  await user.click(likeButton); // clicks like button and checks that dislike decremented by 1 and like incremented by 1
+  expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument();
+  expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument();
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
