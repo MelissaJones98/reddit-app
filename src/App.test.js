@@ -15,6 +15,7 @@ const mockPost = {
   postedBy: 'testuser',
   postHeading: 'My First Post',
   content: 'This is the post content.',
+  category: 'Games', // category added for testing the new category filter component
   likes: 0,
   dislikes: 0,
 };
@@ -25,6 +26,7 @@ const mockPostWithCounts = {
   postedBy: 'testuser',
   postHeading: 'A Popular Post',
   content: 'This post already has some reactions.',
+  category: 'News & Politics',
   likes: 5,
   dislikes: 2,
 };
@@ -35,6 +37,7 @@ const mockPosts = [
     postedBy: 'testuser',
     postHeading: 'My First Post',
     content: 'This is the first post.',
+    category: 'Science',
     likes: 0,
     dislikes: 0,
   },
@@ -43,6 +46,7 @@ const mockPosts = [
     postedBy: 'anotheruser',
     postHeading: 'A Second Post',
     content: 'This is the second post.',
+    category: 'Anime & Cosplay',
     likes: 3,
     dislikes: 1,
   },
@@ -418,5 +422,56 @@ test('shows a message when there are no posts', () => {
 
   expect(screen.getByText(/no posts/i)).toBeInTheDocument(); // checks for some text matching "no posts" (case-insensitive) 
   // forces the component to handle the empty case deliberately - preventing what from a user's perspective looks like a broken page to an intentional "nothing here yet" message
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+// categoryFilter component tests ----------------------------------------------------------------------------------------------------
+// test 1: renders a button for each category plus "All"
+test('renders a button for each category plus "All"', () => {
+  render(
+    <CategoryFilter
+      categories={['Games', 'News & Politics']} // "categories" is the actual category names - NOT placeholders
+      activeCategory="All"
+      onSelectCategory={() => {}}
+    />
+  );
+
+  // checks for the expected categories from the mock data being passed in
+  expect(screen.getByRole('button', { name: /^all$/i })).toBeInTheDocument(); // ^all$ means that it needs to find a string that matches the accessible name exactly (case-insensitive)
+  expect(screen.getByRole('button', { name: /^games$/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /news & politics/i })).toBeInTheDocument();
+});
+
+// test 2: calls onSelectCategory with the clicked category
+test('calls onSelectCategory with the clicked category', async () => {
+  const user = userEvent.setup();
+  const handleSelect = jest.fn(); // real mock function (jest.fn();) 
+
+  render(
+    <CategoryFilter
+      categories={['Games', 'News & Politics']}
+      activeCategory="All"
+      onSelectCategory={handleSelect}
+    />
+  );
+
+  await user.click(screen.getByRole('button', { name: /^games$/i })); // simulates a click on the "Games" button 
+
+  expect(handleSelect).toHaveBeenCalledWith('Games'); // checks the mock function was called with the exact string 'Games'
+  // this proves that clicking a specific button reports that button's category name back to the parent (not hardcoded or the wrong value)
+});
+
+// test 3: marks the active category button as pressed
+test('marks the active category button as pressed', () => {
+  render( // renders posts w/ the same category as the one selected
+    <CategoryFilter
+      categories={['All','Games', 'News & Politics']}
+      activeCategory="Games"
+      onSelectCategory={() => {}}
+    />
+  );
+
+  expect(screen.getByRole('button', { name: /^games$/i })).toHaveAttribute('aria-pressed', 'true'); // the "Games" button should be true as it matches the active category
+  expect(screen.getByRole('button', { name: /news & politics/i })).toHaveAttribute('aria-pressed', 'false'); // the "News & Politics" button should be false since it's not active
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
