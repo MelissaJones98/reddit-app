@@ -1,0 +1,31 @@
+.category-filter {
+  display: flex;
+  flex-wrap: wrap; /* lets the 24 buttons flow onto as many lines as needed rather than overflowwing horizontally or squishing down */
+  gap: 8px; /* keeps consistent spacing between buttons on the same line and between wrapped rows */
+  padding: 16px 24px;
+  border-bottom: 1px solid #333;
+}
+
+.category-filter .btn {
+  flex: 0 0 auto; /* ensures the buttons hold their natural size and prevent text from spilling out */
+  width: auto; /* overrides the "width: 80px;" styling in Banner.css which is applying to all buttons causing squishing and text spillage on category buttons */
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  color: aliceblue;
+  cursor: pointer;
+  white-space: nowrap; /* stops longer category names from wrapping awkwardly mid button */
+}
+
+/* styling to display the active category - overrides the base ".btn" styling from Banner.css */
+.category-filter .btn[aria-pressed="true"] { /* the active button will display solid orange matching the other buttons in the application */
+  background-color: rgb(216, 108, 8);
+  border-color: rgb(216, 108, 8);
+}
+
+.category-filter .btn[aria-pressed="false"] { /* inactive buttons remain outlined and transparent */
+  background-color: transparent;
+  border: 1px solid #555;
+}
+
+/* CategoryFilter.js already sets "aria-pressed" based on "category === activeCategory", the CSS can hook directly into that same attribute 
+rather than needing a separate class toggled in JS*/
