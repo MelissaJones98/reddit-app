@@ -1,0 +1,15 @@
+.post-feed-wrapper {
+  padding-bottom: 40px;
+}
+
+.post-feed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.no-posts {
+  text-align: center;
+  margin-top: 40px;
+  color: #aaa;
+}
