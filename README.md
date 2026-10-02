@@ -4,6 +4,15 @@
 A Reddit clone application using React and Redux. The application will allow users to view and search posts and comments provided by the API.
 Please note that credit for any branding and the logo goes to Reddit. 
 
+** **PLEASE NOTE**
+There is a big constraint with using the Reddit API for this project. Reddit's Data API now requires developers to 
+formally request non-commerical access (which requires a support ticket, not instant signup) before the developer is approved
+to use it. 
+
+As this project is designed entirely to be a learning/portfolio project I have decided to go an alternative route to complete this project
+and make it fully functional. After carrying out some research I decided to create my own databases and build a real full-stack app. This means
+my forms will need to do genuine authentication. 
+
 ## Features
 - Users can use the application on any device (desktop to mobile)
 - Users can use the application on any modern browser
@@ -28,7 +37,11 @@ Please note that credit for any branding and the logo goes to Reddit.
 - Redux
 - Git/GitHub
 - GitHub Projects
-- Reddit API
+- ~~Reddit API~~ **
+- Node.js
+- Express
+- SQL (PostgeSQL, MySQL)
+- JWT tokens (as I already have log in state held in the front-end)
 - HTML
 - CSS
 - JavaScript
