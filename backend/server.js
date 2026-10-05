@@ -4,12 +4,15 @@ require('dotenv').config(); // loads .env file
 
 const app = express(); // calling express creates the application object 
 app.use(cors()); // "app" is what routes and middleware are attached to and is listening for requests - everything builds on top of "app"
-app.use(express.json());
+app.use(express.json()); // enables JSON body parsing - when the React app sends a post request w/ a JSON body ( { "username": "testuser", "password": "....." }) for a login attempt
+// this middleware automatically parses that incoming JSON and makes it available as req.body inside the route handlers
 
+// defined route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'Server is running' });
 });
 
+// determined which port to listen on
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
