@@ -29,8 +29,18 @@ my forms will need to do genuine authentication.
 ![Reddit App Wireframe](./redditApp.drawio.png)
 
 ## How to Use
-1. Run `npm install` on root
-2. Run `npm start` on root
+1. Set up the following environment variables: `DATABASE_URL`, `JWT_SECRET` and `PORT`
+2. Run the following SQL query against your database:
+```SQL
+CREATE USER reddit_app_user WITH PASSWORD 'choose_a_strong_password';
+GRANT CONNECT ON DATABASE reddit_app TO reddit_app_user;
+GRANT USAGE ON SCHEMA public TO reddit_app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO reddit_app_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO reddit_app_user;
+```
+3. Use the service account user you just created in `DATABASE_URL`
+4. Run `npm install` on root
+5. Run `npm start` on root
 
 ## Technologies
 - React
@@ -61,8 +71,24 @@ Implemented error handling for:
 - Every post in the feed isn't displaying the same data
 - No posts/ a future API call retuns nothing 
     - an intentional "no posts" message for the user so page doesn't look broken
+- The email or username is already in use when signing up 
+    - a generic error message within the same process "something went wrong" for other types of errors that may occur during this process
 
-App.test.js is annotated. Please see that for further details on each individual test. 
+App.test.js and auth.js are annotated. Please see the listed files for further details on each individual test. 
+
+### Testing auth.js 
+- Restarted the server using `node server.js` 
+- Tested sign up by running the below command in Powershell: 
+```Powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:5000/api/signup -ContentType "application/json" -Body '{"username":"testuser","email":"test@example.com","password":"password123"}'
+```
+- Got back a token and a user object. Ran it a second time, got "already in use" error. 
+- Tested login by running the below command in Powershell: 
+```Powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:5000/api/login -ContentType "application/json" -Body '{"username":"testuser","password":"password123"}'
+```
+- Tried a wrong password to confirm I got the 401
+- Finally, checked in pgAdmin's Query Tool, ran `SELECT * FROM users;` and checked that `password_hash` is a long string starting with `$2b$` and NOT `password123`
 
 ## Future Work
 - Get a custom domain name and use it for your application
