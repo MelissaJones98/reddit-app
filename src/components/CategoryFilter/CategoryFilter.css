@@ -8,7 +8,6 @@
 
 .category-filter .btn {
   flex: 0 0 auto; /* ensures the buttons hold their natural size and prevent text from spilling out */
-  width: auto; /* overrides the "width: 80px;" styling in Banner.css which is applying to all buttons causing squishing and text spillage on category buttons */
   padding: 6px 14px;
   font-size: 0.85rem;
   color: aliceblue;

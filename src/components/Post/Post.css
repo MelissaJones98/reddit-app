@@ -30,7 +30,6 @@
 }
 
 .post-actions .btn {
-  width: auto; /* overrides the "width: 80px;" styling in Banner.css which is applying to all buttons causing squishing and text spillage */
   padding: 8px 14px; 
 }
 

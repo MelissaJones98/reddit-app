@@ -39,8 +39,11 @@
   border-color: rgb(216, 108, 8);
   border-radius: 0.35rem ;
   padding: 0.5rem;
-  width: 80px;
   font-weight: bold;
   font-size: 15px;
   color: #23272B;
+}
+
+.banner-auth .btn {
+  width: 80px; /* fixed width only for the Banner's Sign Up / Log In / Log Out buttons, so they stay the same size */
 }
