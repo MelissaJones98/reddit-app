@@ -115,6 +115,14 @@ test('search ignores upper and lower case', () => {
   expect(screen.queryByText('My First Post')).not.toBeInTheDocument();
 });
 
+// test 3b: stray spaces around the search term are ignored
+test('search ignores spaces before and after the search term', () => {
+  render(<PostFeed posts={mockPosts} searchTerm="  first  " />);
+
+  expect(screen.getByText('My First Post')).toBeInTheDocument();
+  expect(screen.queryByText('A Second Post')).not.toBeInTheDocument();
+});
+
 // test 4: clearing the search brings every post back
 test('shows everything again when the search is cleared', () => {
   const { rerender } = render(<PostFeed posts={mockPosts} searchTerm="first" />); // rerender lets the same component be given new props, like App would after the user deletes their search

@@ -31,13 +31,17 @@ const CATEGORIES = [
   'Nature & Outdoors',
 ];
 
-function PostFeed({ posts }) {
+function PostFeed({ posts, searchTerm = '' }) { // searchTerm comes from App (typed into the Banner) - defaults to '' so PostFeed still works if it isn't passed
   const [activeCategory, setActiveCategory] = useState('All');
 
-  const filteredPosts =
-    activeCategory === 'All'
-      ? posts
-      : posts.filter((post) => post.category === activeCategory);
+  // a post is shown only if it passes BOTH filters
+  const filteredPosts = posts.filter((post) => {
+    const matchesCategory = activeCategory === 'All' || post.category === activeCategory;
+
+    const matchesSearch = post.postHeading.toLowerCase().trim().includes(searchTerm.toLowerCase().trim());
+    
+    return matchesCategory && matchesSearch;
+  });
 
   return (
     <div className="post-feed-wrapper">

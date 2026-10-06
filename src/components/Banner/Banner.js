@@ -6,7 +6,9 @@ import logo from './logo.png';
 
 // banner is fully "dumb" it renders based on props and calls - its parent handles any actual navigation
 
-function Banner({ onSignUpClick, onLoginClick, isLoggedIn, onLogoutClick }) {
+// "searchTerm" and "onSearchChange" follow the same pattern - the search text lives in App, Banner just displays it and reports each keystroke
+
+function Banner({ onSignUpClick, onLoginClick, isLoggedIn, onLogoutClick, searchTerm = '', onSearchChange }) {
   return (
     <header className="banner">
       <div className="banner-logo">
@@ -18,6 +20,8 @@ function Banner({ onSignUpClick, onLoginClick, isLoggedIn, onLogoutClick }) {
           type="text"
           aria-label="search"
           placeholder="Search..."
+          value={searchTerm} // controlled input - shows whatever App's searchTerm state currently is
+          onChange={(e) => onSearchChange(e.target.value)} // reports the new text up to App on every keystroke
         />
       </div>
 

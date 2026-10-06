@@ -10,6 +10,7 @@ import PostFeed from './components/PostFeed/PostFeed';
 function App() {
   const navigate = useNavigate(); // navigate is now a function that can be called anywhere in this component
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(''); // lives in App because Banner (where it's typed) and PostFeed (where it's used) are siblings - their closest shared parent holds it
 
   //handler functions
   // data is the { token, user } object the backend sends back after a successful login or sign up
@@ -60,12 +61,14 @@ function App() {
         onLoginClick={() => navigate('/login')}  
         onSignUpClick={() => navigate('/signup')}
         onLogoutClick={handleLogoutClick} // passed directly because it doesn't require any arguments
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm} // the state setter can be passed directly - Banner calls it with the new text
       />
       {/* onLoginClick and onSignUpClick are written as small inline arrow functions rather than being passed directly because navigate needs to be called with an argument 
       when the button is clicked, not run immediately during render */}
 
       <Routes> {/* looks at the current URL and renders whichever route matches */}
-        <Route path="/" element={<PostFeed posts={mockPosts} />} />
+        <Route path="/" element={<PostFeed posts={mockPosts} searchTerm={searchTerm} />} />
         <Route
           path="/login"
           element={<LoginForm onLoginSuccess={handleLoginSuccess} />}
