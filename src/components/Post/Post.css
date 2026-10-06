@@ -1,5 +1,7 @@
 .post {
-  max-width: 700px;
+  width: 100%; /* fill the feed's width... */
+  max-width: 700px; /* ...but never wider than 700px - together every post is the same width whatever its content (align-items: center in PostFeed.css would otherwise shrink each post to fit its text) */
+  box-sizing: border-box; /* includes the padding and border inside that 700px, otherwise each post would be 700px + 40px padding + 2px border */
   margin: 24px auto;
   padding: 16px 20px;
   background-color: #2c3136;

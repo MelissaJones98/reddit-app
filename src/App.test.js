@@ -59,7 +59,10 @@ const mockPosts = [
 const originalFetch = global.fetch;
 
 beforeEach(() => {
-  global.fetch = jest.fn(); // a fresh mock before every test so calls from one test can't leak into the next
+  // a fresh mock before every test so calls from one test can't leak into the next
+  // App fetches /api/posts as soon as it appears, so by default every fetch succeeds with an empty list - tests that care about the response queue their own with mockFetchResponse
+  // (a queued ...Once response is always used before this default)
+  global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => [] }));
   localStorage.clear(); // the token is stored in localStorage after login/sign up - start every test logged out
 });
 
@@ -153,22 +156,112 @@ test('search and category filter work together', async () => {
 });
 
 // test 7: FULL FLOW - type in the Banner's search bar and the feed on the home page filters
-// NOTE: relies on App's hardcoded mockPosts ('My First Post', 'A Popular Post') - will need a mocked fetch once PostFeed loads posts from the backend
 test('typing in the search bar filters the posts in the feed', async () => {
   const user = userEvent.setup();
+  mockFetchResponse(200, mockPosts); // the posts App loads from GET /api/posts - queued BEFORE render because App fetches as soon as it appears
+
   render(
     <MemoryRouter initialEntries={['/']}>
       <App />
     </MemoryRouter>
   );
 
-  expect(screen.getByText('My First Post')).toBeInTheDocument();
-  expect(screen.getByText('A Popular Post')).toBeInTheDocument();
+  expect(await screen.findByText('My First Post')).toBeInTheDocument(); // findBy waits for the fetch to finish
+  expect(screen.getByText('A Second Post')).toBeInTheDocument();
 
-  await user.type(screen.getByRole('textbox', { name: /search/i }), 'popular');
+  await user.type(screen.getByRole('textbox', { name: /search/i }), 'second');
 
-  expect(screen.getByText('A Popular Post')).toBeInTheDocument();
+  expect(screen.getByText('A Second Post')).toBeInTheDocument();
   expect(screen.queryByText('My First Post')).not.toBeInTheDocument();
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+// loading posts from the backend -----------------------------------------------------------------------------------------------------
+// App fetches the feed from GET /api/posts when it first appears, instead of using hardcoded posts
+
+// test 1: the request goes to the right place
+test('requests the posts from /api/posts when the app loads', async () => {
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  await screen.findByText(/no posts to show yet/i); // wait for the (empty, default) response to be handled before the test ends
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts');
+});
+
+// test 2: the posts the server sends back appear in the feed
+test('shows the posts loaded from the server', async () => {
+  mockFetchResponse(200, mockPosts);
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  expect(await screen.findByText('My First Post')).toBeInTheDocument();
+  expect(screen.getByText('A Second Post')).toBeInTheDocument();
+});
+
+// test 3: something is shown while waiting, so the page doesn't look empty or broken
+test('shows a loading message while the posts are loading', () => {
+  global.fetch.mockReturnValueOnce(new Promise(() => {})); // a promise that never settles - the request stays "in progress" forever
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByText(/loading posts/i)).toBeInTheDocument();
+  expect(screen.queryByText(/no posts to show yet/i)).not.toBeInTheDocument(); // "no posts" would be misleading - we don't know yet
+});
+
+// test 4: the server can't be reached (backend not running) - fetch throws
+test('shows an error when the posts cannot be loaded', async () => {
+  global.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  expect(await screen.findByText(/could not load posts/i)).toBeInTheDocument();
+  expect(screen.queryByText(/no posts to show yet/i)).not.toBeInTheDocument(); // an error isn't the same as an empty feed
+});
+
+// test 5: the server replies but with an error status (e.g. a 500 from a database problem)
+test('shows an error when the server responds with an error status', async () => {
+  mockFetchResponse(500, { error: 'Something went wrong' });
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  expect(await screen.findByText(/could not load posts/i)).toBeInTheDocument();
+});
+
+// test 6: the user can leave the error state - "Try again" re-requests the posts
+test('clicking Try again after an error loads the posts', async () => {
+  const user = userEvent.setup();
+  global.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch')); // first attempt fails
+  mockFetchResponse(200, mockPosts); // second attempt succeeds
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  await user.click(await screen.findByRole('button', { name: /try again/i }));
+
+  expect(await screen.findByText('My First Post')).toBeInTheDocument();
+  expect(screen.queryByText(/could not load posts/i)).not.toBeInTheDocument();
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -433,8 +526,8 @@ test('shows a validation error when sign up passwords do not match', async () =>
   // validation error appears
   expect(await screen.findByText(/passwords do not match/i)).toBeInTheDocument();
 
-  // the mismatch is caught in the browser so no request is sent to the server
-  expect(global.fetch).not.toHaveBeenCalled();
+  // the mismatch is caught in the browser so no sign up request is sent to the server (App's own /api/posts request is fine)
+  expect(global.fetch).not.toHaveBeenCalledWith('/api/signup', expect.anything());
 
   // user should not be logged in
   expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument();

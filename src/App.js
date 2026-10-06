@@ -1,6 +1,6 @@
 import './App.css';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Routes, Route } from 'react-router-dom';
 import Banner from './components/Banner/Banner';
 import LoginForm from './components/LoginForm/LoginForm';
@@ -48,27 +48,54 @@ function App() {
     setIsLoggedIn(false); // flips the isLoggedIn back to false - no navigation needed as logging out doesn't move the user to a different page
   };
 
-  // mock data -----------------------------------------------------------------------------------------------------------------------------------
-  const mockPosts = [
-    {
-      id: '1',
-      postedBy: 'testuser',
-      postHeading: 'My First Post',
-      content: 'This is my first post content.',
-      category: 'Games',
-      likes: 0,
-      dislikes: 0,
-    },
-    {
-      id: '2',
-      postedBy: 'anotheruser',
-      postHeading: 'A Popular Post',
-      content: 'This post already has some reactions.',
-      category: 'News & Politics',
-      likes: 5,
-      dislikes: 2,
-    },
-  ];
+  // posts from the backend -----------------------------------------------------------------------------------------------------------------------
+  const [posts, setPosts] = useState([]); // the feed - starts empty until the server replies
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true); // true from the start, because the request begins as soon as App appears
+  const [postsError, setPostsError] = useState(''); // a message to show if the posts couldn't be loaded
+
+  // asks the server for the feed - used when App first appears AND by the "Try again" button
+  // useCallback keeps this the same function between renders, so the useEffect below (which lists it as a dependency) only runs once rather than on every render
+  const loadPosts = useCallback(async () => {
+    setIsLoadingPosts(true);
+    setPostsError(''); // clear an old error when trying again
+
+    try {
+      const response = await fetch('/api/posts'); // GET is fetch's default, so no options are needed - and no token, reading the feed is public
+      const data = await response.json(); // an array of posts on success, or { error } on failure
+
+      if (response.ok) {
+        setPosts(data);
+      } else {
+        setPostsError('Could not load posts');
+      }
+    } catch (err) {
+      // no usable response at all e.g. the backend isn't running
+      setPostsError('Could not load posts. Please check your connection and try again.');
+    } finally {
+      setIsLoadingPosts(false); // finally runs whether the try worked or the catch ran - either way, we're no longer loading
+    }
+  }, []);
+
+  // useEffect runs code AFTER the component appears on screen - here, it requests the feed once when App first loads
+  // (fetching directly in the component body would run on every render, and each response would update state, causing another render... forever)
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
+
+  // what to show on the home page: a loading message, an error with a way out, or the feed itself
+  let homePage;
+  if (isLoadingPosts) {
+    homePage = <p className="feed-status">Loading posts...</p>;
+  } else if (postsError) {
+    homePage = (
+      <div className="feed-status">
+        <p>{postsError}</p>
+        <button className="btn" onClick={loadPosts}>Try again</button> {/* lets the user leave the error state without refreshing the page */}
+      </div>
+    );
+  } else {
+    homePage = <PostFeed posts={posts} searchTerm={searchTerm} />;
+  }
   // ---------------------------------------------------------------------------------------------------------------------------------------------
 
   return (
@@ -85,7 +112,7 @@ function App() {
       when the button is clicked, not run immediately during render */}
 
       <Routes> {/* looks at the current URL and renders whichever route matches */}
-        <Route path="/" element={<PostFeed posts={mockPosts} searchTerm={searchTerm} />} />
+        <Route path="/" element={homePage} />
         <Route
           path="/login"
           element={<LoginForm onLoginSuccess={handleLoginSuccess} />}
