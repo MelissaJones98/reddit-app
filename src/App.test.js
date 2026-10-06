@@ -7,6 +7,7 @@ import LoginForm from './components/LoginForm/LoginForm';
 import SignUpForm from './components/SignUpForm/SignUpForm';
 import Post from './components/Post/Post';
 import PostFeed from './components/PostFeed/PostFeed';
+import CategoryFilter from './components/CategoryFilter/CategoryFilter';
 import App from './App';
 
 // mock data for testing as there isn't a backend yet ---------------------------------------------------------------------------------
@@ -399,7 +400,7 @@ test('renders the post details', () => {
 test('renders Like, Dislike, Comments and Share buttons', () => {
   render(<Post post={mockPost} />);
 
-  expect(screen.getByRole('button', { name: /like/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^like/i })).toBeInTheDocument(); // anchored with ^ - otherwise /like/i also matches "dislike" and finds two buttons
   expect(screen.getByRole('button', { name: /dislike/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /comments/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
@@ -448,20 +449,16 @@ test('clicking Comments opens the detailed post view', async () => {
 // test 6: share copies a link
 // copying to clipboard using a real browser API (navigator.clipboard.writeText) which doesn't exist in the test environment
 test('clicking Share copies the post link to the clipboard', async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup(); // user-event attaches its own fake clipboard to navigator here (jsdom doesn't have one)
 
-  // mock the clipboard API, since jsdom doesn't implement it
-  Object.assign(navigator, {
-    clipboard: {
-      writeText: jest.fn(),
-    },
-  });
+  // navigator.clipboard is read-only so it can't be replaced with Object.assign - instead spy on user-event's fake clipboard to record what's written to it
+  const writeTextSpy = jest.spyOn(navigator.clipboard, 'writeText');
 
   render(<Post post={mockPost} />);
 
   await user.click(screen.getByRole('button', { name: /share/i }));
 
-  expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+  expect(writeTextSpy).toHaveBeenCalledWith(
     expect.stringContaining('/post/1')
   );
 });
@@ -476,11 +473,18 @@ test('like and dislike counts start at the post\'s existing values and increment
   expect(screen.getByText('5', { selector: '.like-count' })).toBeInTheDocument(); // checks the initial render - does the componenet correctly display the current counts?
   expect(screen.getByText('2', { selector: '.dislike-count' })).toBeInTheDocument();
 
-  await user.click(screen.getByRole('button', { name: /^like/i }));
-  await user.click(screen.getByRole('button', { name: /dislike/i }));
+  // click like button
+  await user.click(screen.getByRole('button', { name: /^like/i })); 
 
-  // increments from the existing value, not from zero
-  expect(screen.getByText('6', { selector: '.like-count' })).toBeInTheDocument();
+  // checks that the likes incremented by 1 and the dislikes stayed the same because only the like button was clicked
+  expect(screen.getByText('6', { selector: '.like-count' })).toBeInTheDocument(); 
+  expect(screen.getByText('2', { selector: '.dislike-count' })).toBeInTheDocument();
+
+  // click the dislike button
+  await user.click(screen.getByRole('button', { name: /dislike/i })); 
+
+  // checks that the likes decremented by 1 and the dislikes incremented by 1 because the dislike button was clicked after the user had already clicked the like button - this checks the one reaction per user rule as well as the switch function
+  expect(screen.getByText('5', { selector: '.like-count' })).toBeInTheDocument(); 
   expect(screen.getByText('3', { selector: '.dislike-count' })).toBeInTheDocument();
 });
 
@@ -583,7 +587,7 @@ test('shows a message when there are no posts', () => {
 test('renders a button for each category plus "All"', () => {
   render(
     <CategoryFilter
-      categories={['Games', 'News & Politics']} // "categories" is the actual category names - NOT placeholders
+      categories={['All', 'Games', 'News & Politics']} // "categories" is the actual category names - NOT placeholders. 'All' is included because PostFeed passes it in as part of the list (CategoryFilter doesn't add it itself)
       activeCategory="All"
       onSelectCategory={() => {}}
     />
