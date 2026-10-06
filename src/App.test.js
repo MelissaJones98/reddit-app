@@ -332,6 +332,54 @@ test('logging out removes the stored token', async () => {
   expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
 });
 
+// staying logged in after a page refresh ---------------------------------------------------------------------------------------------
+// a refresh wipes React state, so App has to rebuild isLoggedIn from the token saved in localStorage
+// a JWT is three base64 sections joined by dots: header.payload.signature - the payload holds "exp", the expiry time in SECONDS since 1970
+// this helper builds a fake token with whatever payload a test needs (the signature is never checked in the browser, only by the server)
+const makeFakeToken = (payload) => `fake-header.${btoa(JSON.stringify(payload))}.fake-signature`;
+const nowInSeconds = () => Math.floor(Date.now() / 1000);
+
+// test 6: a saved token that hasn't expired keeps the user logged in
+test('stays logged in after a refresh when a valid token is saved', () => {
+  localStorage.setItem('token', makeFakeToken({ id: 1, username: 'testuser', exp: nowInSeconds() + 60 * 60 })); // expires in an hour
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  ); // rendering App fresh is the test equivalent of refreshing the page
+
+  expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument();
+});
+
+// test 7: an expired token (older than the 7 day expiry) is treated as logged out
+test('shows logged out after a refresh when the saved token has expired', () => {
+  localStorage.setItem('token', makeFakeToken({ id: 1, username: 'testuser', exp: nowInSeconds() - 60 })); // expired a minute ago
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument();
+});
+
+// test 8: a token that isn't a real JWT (e.g. tampered with or corrupted) doesn't crash the app - it's treated as logged out
+test('shows logged out after a refresh when the saved token is not a valid JWT', () => {
+  localStorage.setItem('token', 'not-a-real-token');
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
+
 //Failure Case Tests
 // failure case 1: bad login
 test('shows an error when login fails with incorrect credentials', async () => {

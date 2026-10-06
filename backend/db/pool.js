@@ -1,5 +1,5 @@
 const { Pool } = require('pg'); // loads the pg package - { pool } pulls out the Pool class which manages database connections 
-require('dotenv').config(); // loads the dotenv package and immediately calls its .config() method which reads the backend/.env file and makes its contents available through process.env
+require('../loadEnv'); // reads backend/.env (or backend/.env.test when running tests) and makes its contents available through process.env
 
 const pool = new Pool({ // creates a new instance of the Pool class 
   connectionString: process.env.DATABASE_URL, // <- configured with this - pulling the full database URL inside .env
