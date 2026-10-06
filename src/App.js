@@ -12,17 +12,21 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   //handler functions
-  const handleLoginSuccess = () => {
+  // data is the { token, user } object the backend sends back after a successful login or sign up
+  const handleLoginSuccess = (data) => {
+    localStorage.setItem('token', data.token); // saves the JWT so later requests (creating posts, reacting, commenting) can prove who the user is
     setIsLoggedIn(true);
     navigate('/'); // back to main page after login
   };
 
-  const handleSignUpSuccess = () => {
+  const handleSignUpSuccess = (data) => {
+    localStorage.setItem('token', data.token);
     setIsLoggedIn(true); // sign up logs the user in automatically
     navigate('/');
   };
 
   const handleLogoutClick = () => {
+    localStorage.removeItem('token'); // the token is the user's proof of login, so logging out throws it away
     setIsLoggedIn(false); // flips the isLoggedIn back to false - no navigation needed as logging out doesn't move the user to a different page
   };
 
@@ -60,7 +64,7 @@ function App() {
       {/* onLoginClick and onSignUpClick are written as small inline arrow functions rather than being passed directly because navigate needs to be called with an argument 
       when the button is clicked, not run immediately during render */}
 
-      <Routes> // looks at the current URL and renders whichever route matches 
+      <Routes> {/* looks at the current URL and renders whichever route matches */}
         <Route path="/" element={<PostFeed posts={mockPosts} />} />
         <Route
           path="/login"

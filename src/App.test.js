@@ -53,6 +53,35 @@ const mockPosts = [
 ];
 // -----------------------------------------------------------------------------------------------------------------------------------
 
+// fetch mocking ----------------------------------------------------------------------------------------------------------------------
+// the login and sign up forms now talk to the backend using fetch - the tests replace fetch with a jest mock so they never hit the real server
+const originalFetch = global.fetch;
+
+beforeEach(() => {
+  global.fetch = jest.fn(); // a fresh mock before every test so calls from one test can't leak into the next
+  localStorage.clear(); // the token is stored in localStorage after login/sign up - start every test logged out
+});
+
+afterEach(() => {
+  global.fetch = originalFetch; // put the real fetch back
+});
+
+// makes the next fetch call resolve with a fake response shaped like the real one: ok (true for 2xx statuses), status, and a json() method returning the body
+const mockFetchResponse = (status, body) => {
+  global.fetch.mockResolvedValueOnce({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+};
+
+// what a successful /api/login or /api/signup response looks like (matches auth.js)
+const mockAuthResponse = {
+  token: 'fake-jwt-token',
+  user: { id: 1, username: 'testuser', email: 'testuser@example.com' },
+};
+// -----------------------------------------------------------------------------------------------------------------------------------
+
 // searchBar Tests --------------------------------------------------------------------------------------------------------------------
 // testing if the searchBar filters the page content based on user input into the input field
 test('filters items based on search input', async () => {
@@ -134,6 +163,9 @@ test('login button shows "Log out" after a successful login', async () => {
   // navigate to the login form
   await user.click(screen.getByRole('button', { name: /log in/i }));
 
+  // the server will accept this login
+  mockFetchResponse(200, mockAuthResponse);
+
   // fill in and submit the form
   await user.type(screen.getByLabelText(/username/i), 'testuser');
   await user.type(screen.getByLabelText(/password/i), 'password123');
@@ -141,6 +173,31 @@ test('login button shows "Log out" after a successful login', async () => {
 
   // wait for the app to reflect the logged-in state
   expect(await screen.findByRole('button', { name: /log out/i })).toBeInTheDocument();
+
+  // the token from the server is saved so later requests can prove who the user is
+  expect(localStorage.getItem('token')).toBe('fake-jwt-token');
+});
+
+// test 3b: the login form sends the typed details to the backend in the format auth.js expects
+test('login form sends the username and password to /api/login', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/login']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  mockFetchResponse(200, mockAuthResponse);
+
+  await user.type(screen.getByLabelText(/username/i), 'testuser');
+  await user.type(screen.getByLabelText(/password/i), 'password123');
+  await user.click(screen.getByRole('button', { name: /submit/i }));
+
+  expect(global.fetch).toHaveBeenCalledWith('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, // without this express.json() ignores the body
+    body: JSON.stringify({ username: 'testuser', password: 'password123' }),
+  });
 });
 
 // test 4: after a successful sign up the user is automatically logged in and the button flips to "Log Out"
@@ -158,6 +215,9 @@ test('login button shows "Log out" after a successful sign up', async () => {
   // confirm we're on the sign up form
   expect(screen.getByRole('heading', { name: /sign up/i })).toBeInTheDocument();
 
+  // the server will accept this sign up (201 = created)
+  mockFetchResponse(201, mockAuthResponse);
+
   // fill in and submit the form
   await user.type(screen.getByLabelText(/username/i), 'testuser');
   await user.type(screen.getByLabelText(/email/i), 'testuser@example.com');
@@ -167,6 +227,52 @@ test('login button shows "Log out" after a successful sign up', async () => {
 
   // wait for the app to reflect the logged-in state
   expect(await screen.findByRole('button', { name: /log out/i })).toBeInTheDocument();
+  expect(localStorage.getItem('token')).toBe('fake-jwt-token');
+});
+
+// test 4b: the sign up form sends username, email and password - confirmPassword is only checked in the browser and never sent
+test('sign up form sends the username, email and password to /api/signup', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/signup']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  mockFetchResponse(201, mockAuthResponse);
+
+  await user.type(screen.getByLabelText(/username/i), 'testuser');
+  await user.type(screen.getByLabelText(/email/i), 'testuser@example.com');
+  await user.type(screen.getByLabelText(/^password/i), 'password123');
+  await user.type(screen.getByLabelText(/confirm password/i), 'password123');
+  await user.click(screen.getByRole('button', { name: /submit/i }));
+
+  expect(global.fetch).toHaveBeenCalledWith('/api/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'testuser', email: 'testuser@example.com', password: 'password123' }),
+  });
+});
+
+// test 5: logging out removes the stored token
+test('logging out removes the stored token', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/login']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  mockFetchResponse(200, mockAuthResponse);
+
+  await user.type(screen.getByLabelText(/username/i), 'testuser');
+  await user.type(screen.getByLabelText(/password/i), 'password123');
+  await user.click(screen.getByRole('button', { name: /submit/i }));
+
+  await user.click(await screen.findByRole('button', { name: /log out/i }));
+
+  expect(localStorage.getItem('token')).toBeNull();
+  expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
 });
 
 //Failure Case Tests
@@ -181,6 +287,9 @@ test('shows an error when login fails with incorrect credentials', async () => {
 
   // confirm we're on the log in form
   await user.click(screen.getByRole('button', { name: /log in/i }));
+
+  // the server rejects the login with the same 401 response auth.js sends
+  mockFetchResponse(401, { error: 'Incorrect username or password' });
 
   // fill in and submit the form with incorrect details
   await user.type(screen.getByLabelText(/username/i), 'wronguser');
@@ -219,6 +328,9 @@ test('shows a validation error when sign up passwords do not match', async () =>
   // validation error appears
   expect(await screen.findByText(/passwords do not match/i)).toBeInTheDocument();
 
+  // the mismatch is caught in the browser so no request is sent to the server
+  expect(global.fetch).not.toHaveBeenCalled();
+
   // user should not be logged in
   expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument();
 
@@ -227,6 +339,47 @@ test('shows a validation error when sign up passwords do not match', async () =>
   expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
   expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
   expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
+});
+
+// failure case 3: the server rejects the sign up (e.g. 409 when the username or email is taken) - the server's message is shown
+test('shows the server\'s error when sign up is rejected', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/signup']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  mockFetchResponse(409, { error: 'Username or email already in use' });
+
+  await user.type(screen.getByLabelText(/username/i), 'testuser');
+  await user.type(screen.getByLabelText(/email/i), 'testuser@example.com');
+  await user.type(screen.getByLabelText(/^password/i), 'password123');
+  await user.type(screen.getByLabelText(/confirm password/i), 'password123');
+  await user.click(screen.getByRole('button', { name: /submit/i }));
+
+  expect(await screen.findByText(/username or email already in use/i)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument();
+  expect(localStorage.getItem('token')).toBeNull();
+});
+
+// failure case 4: the server can't be reached (backend not running, no internet) - fetch itself throws rather than returning a response
+test('shows an error when the server cannot be reached during login', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/login']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  global.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch')); // what a real browser throws when the request can't connect
+
+  await user.type(screen.getByLabelText(/username/i), 'testuser');
+  await user.type(screen.getByLabelText(/password/i), 'password123');
+  await user.click(screen.getByRole('button', { name: /submit/i }));
+
+  expect(await screen.findByText(/could not connect to the server/i)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument();
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
 

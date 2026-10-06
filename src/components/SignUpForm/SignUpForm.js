@@ -9,18 +9,34 @@ function SignUpForm({ onSignUpSuccess }) { // this function calls the onSignUpSu
   const [error, setError] = useState(''); // any error message to display
   // all start as an empty string
 
-  // runs when the submit btn is clicked
-  const handleSubmit = (e) => {
+  // runs when the submit btn is clicked - async because it has to wait for the server to reply
+  const handleSubmit = async (e) => {
     e.preventDefault(); // stops the browser's default behaviour of reloading the page which would wipe the React state
     setError(''); // clears any old error messages before checking again
 
+    // checked in the browser first - no point asking the server if the passwords don't even match
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    // Placeholder logic — replace with a real API call later
-    onSignUpSuccess();
+    try {
+      const response = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password }), // confirmPassword is deliberately left out - the server only needs the real password
+      });
+      const data = await response.json(); // either { token, user } on success or { error } on failure
+
+      if (response.ok) {
+        onSignUpSuccess(data); // hands { token, user } up to App - sign up logs the user in automatically
+      } else {
+        setError(data.error || 'Sign up failed. Please try again.'); // e.g. 409 "Username or email already in use"
+      }
+    } catch (err) {
+      // fetch only throws when there's no usable response at all e.g. the backend isn't running
+      setError('Could not connect to the server. Please try again.');
+    }
   };
 
   return (
