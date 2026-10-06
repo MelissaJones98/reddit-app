@@ -84,35 +84,83 @@ const mockAuthResponse = {
 // -----------------------------------------------------------------------------------------------------------------------------------
 
 // searchBar Tests --------------------------------------------------------------------------------------------------------------------
-// testing if the searchBar filters the page content based on user input into the input field
-test('filters items based on search input', async () => {
+// the search input lives in Banner (dumb - it only reports what's typed via onSearchChange), App holds the searchTerm state,
+// and PostFeed receives searchTerm as a prop and filters the posts by heading - same pattern as CategoryFilter/activeCategory
+
+// test 1: Banner reports what the user types up to its parent
+test('typing in the search bar calls onSearchChange with the typed text', async () => {
   const user = userEvent.setup(); // creates a "user" object to interact w/ the page
-  render(<App />); // renders the app in a fake browser environment - not the real browser (test environment)
+  const handleSearchChange = jest.fn(); // mock function standing in for App's state setter
 
-  // all items visible initially
-  expect(screen.getByText('Apple')).toBeInTheDocument();
-  expect(screen.getByText('Banana')).toBeInTheDocument();
+  render(<Banner isLoggedIn={false} searchTerm="" onSearchChange={handleSearchChange} />);
 
-  // type into the search bar
-  await user.type(screen.getByRole('textbox', { name: /search/i }), 'app');
+  await user.type(screen.getByRole('textbox', { name: /search/i }), 'a'); // getByRole('textbox') looks for a text input, { name: /search/i } narrows it to the one labelled "search"
 
-  // matching item stays, non-matching disappears
-  expect(screen.getByText('Apple')).toBeInTheDocument();
-  expect(screen.queryByText('Banana')).not.toBeInTheDocument();
+  expect(handleSearchChange).toHaveBeenCalledWith('a');
 });
 
-test('shows everything again when the search is cleared', async () => {
-  const user = userEvent.setup(); // creates a "user" object to interact w/ the page
-  render(<App />);
+// test 2: only posts whose heading contains the search term are shown
+test('filters posts by heading based on the search term', () => {
+  render(<PostFeed posts={mockPosts} searchTerm="first" />);
 
-  const input = screen.getByRole('textbox', { name: /search/i }); // finds the search input on the rendered page and stores it to be reused
-  // getByRole('textbox') looks for text input
-  // { name: /search/i } narrows it down to one whose accessible name contains "search" (case-sensitive, because of the i) 
-  await user.type(input, 'app'); // simulates someone clicking into the input and typing "app" 
-  await user.clear(input); // simulates the user selecting everything in the input and deleting it, leaving the box empty
+  expect(screen.getByText('My First Post')).toBeInTheDocument(); // matching post stays
+  expect(screen.queryByText('A Second Post')).not.toBeInTheDocument(); // non-matching post disappears - queryByText because we're checking absence
+});
 
-  expect(screen.getByText('Banana')).toBeInTheDocument(); // looks for "Banana" on the page and asserts that it's there 
-  // if the filter didn't clear properly Banana would still be hidden, getByText would throw an error and the test will fail
+// test 3: users shouldn't have to match the capitalisation of a heading
+test('search ignores upper and lower case', () => {
+  render(<PostFeed posts={mockPosts} searchTerm="SECOND" />);
+
+  expect(screen.getByText('A Second Post')).toBeInTheDocument();
+  expect(screen.queryByText('My First Post')).not.toBeInTheDocument();
+});
+
+// test 4: clearing the search brings every post back
+test('shows everything again when the search is cleared', () => {
+  const { rerender } = render(<PostFeed posts={mockPosts} searchTerm="first" />); // rerender lets the same component be given new props, like App would after the user deletes their search
+
+  expect(screen.queryByText('A Second Post')).not.toBeInTheDocument();
+
+  rerender(<PostFeed posts={mockPosts} searchTerm="" />);
+
+  expect(screen.getByText('My First Post')).toBeInTheDocument();
+  expect(screen.getByText('A Second Post')).toBeInTheDocument();
+});
+
+// test 5: a search with no matches shows the existing "no posts" message rather than a blank page
+test('shows the no posts message when nothing matches the search', () => {
+  render(<PostFeed posts={mockPosts} searchTerm="zzzz" />);
+
+  expect(screen.getByText(/no posts to show yet/i)).toBeInTheDocument();
+});
+
+// test 6: search and category filter are applied together - a post has to match both to be shown
+test('search and category filter work together', async () => {
+  const user = userEvent.setup();
+  render(<PostFeed posts={mockPosts} searchTerm="second" />); // "A Second Post" matches the search but is in Anime & Cosplay
+
+  await user.click(screen.getByRole('button', { name: /^science$/i })); // "My First Post" is in Science but doesn't match the search
+
+  expect(screen.getByText(/no posts to show yet/i)).toBeInTheDocument(); // neither post matches both filters
+});
+
+// test 7: FULL FLOW - type in the Banner's search bar and the feed on the home page filters
+// NOTE: relies on App's hardcoded mockPosts ('My First Post', 'A Popular Post') - will need a mocked fetch once PostFeed loads posts from the backend
+test('typing in the search bar filters the posts in the feed', async () => {
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByText('My First Post')).toBeInTheDocument();
+  expect(screen.getByText('A Popular Post')).toBeInTheDocument();
+
+  await user.type(screen.getByRole('textbox', { name: /search/i }), 'popular');
+
+  expect(screen.getByText('A Popular Post')).toBeInTheDocument();
+  expect(screen.queryByText('My First Post')).not.toBeInTheDocument();
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
 
