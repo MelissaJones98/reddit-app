@@ -30,6 +30,7 @@ my forms will need to do genuine authentication.
 - Staying logged in after a page refresh, until the token expires
 - A feed of posts loaded from the database, newest first, with loading and error states and a **Try again** button
 - Search posts by heading, and filter them by category (both work together)
+- "Most Visited" shows posts from every category, ordered by total likes and dislikes
 - Create a post (logged in users only) with a heading, content and category
 - Like and dislike posts - one reaction per user per post, saved on the server, with the user's own reaction highlighted
 - Read the comments on a post in a modal, and add comments when logged in
@@ -177,7 +178,7 @@ The project is built test-first (TDD): each feature starts as failing tests, the
 
 | Suite | Where | Tests | Covers |
 |---|---|---|---|
-| Frontend | `src/App.test.js` | 69 | Search, login/sign up/logout, staying logged in after a refresh, loading the feed, creating posts, reactions, comments, the category filter |
+| Frontend | `src/App.test.js` | 74 | Search, login/sign up/logout, staying logged in after a refresh, loading the feed, creating posts, reactions, comments, the category filter, Most Visited |
 | Backend | `backend/tests/posts.test.js` | 10 | Reading the feed and creating posts (including auth and validation) |
 | Backend | `backend/tests/reactions.test.js` | 15 | Adding, removing and switching reactions, and `userReaction` in the feed |
 | Backend | `backend/tests/comments.test.js` | 12 | Reading and adding comments (including auth and validation) |
@@ -239,7 +240,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO re
 
 ## Future Work
 - Make the Share link (`/post/:id`) open the post - it's copied to the clipboard but there's no route for it yet
-- Make "Most Visited" sort the feed (e.g. by total reactions) - posts can't belong to it, so it currently always shows "No posts to show yet"
 - Log the user out automatically if their token expires while the app is open
 - Get a custom domain name and use it for your application
 - Set up a CI/CD workflow to automatically deploy your application when the master branch in the repository changes

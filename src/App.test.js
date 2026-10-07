@@ -1176,6 +1176,79 @@ test('shows a message when there are no posts', () => {
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
 
+// most visited ----------------------------------------------------------------------------------------------------------------------
+// "Most Visited" isn't a category a post belongs to - it shows posts from EVERY category, sorted by total reactions (likes + dislikes), most first
+
+// posts listed newest first, the way the server sends them - each with a different total so the sorted order is easy to check
+const postsForSorting = [
+  { id: 'a', postedBy: 'user1', postHeading: 'Quiet post', content: 'Few reactions', category: 'Games', likes: 1, dislikes: 0 }, // total 1
+  { id: 'b', postedBy: 'user2', postHeading: 'Liked post', content: 'Lots of likes', category: 'Science', likes: 3, dislikes: 1 }, // total 4
+  { id: 'c', postedBy: 'user3', postHeading: 'Divisive post', content: 'Mostly dislikes', category: 'Music', likes: 0, dislikes: 5 }, // total 5
+];
+
+// the headings of the posts on screen, in page order - each Post is an <article>, which has the role "article"
+const headingsInOrder = () =>
+  screen.getAllByRole('article').map((article) => article.querySelector('.post-heading').textContent);
+
+// test 1: posts from every category are included
+test('Most Visited shows posts from every category', async () => {
+  const user = userEvent.setup();
+  render(<PostFeed posts={mockPosts} />); // one Science post and one Anime & Cosplay post
+
+  await user.click(screen.getByRole('button', { name: /most visited/i }));
+
+  expect(screen.getByText('My First Post')).toBeInTheDocument();
+  expect(screen.getByText('A Second Post')).toBeInTheDocument();
+});
+
+// test 2: the main rule - most reactions first, and dislikes count as well as likes
+test('Most Visited orders posts by total likes and dislikes, most first', async () => {
+  const user = userEvent.setup();
+  render(<PostFeed posts={postsForSorting} />);
+
+  await user.click(screen.getByRole('button', { name: /most visited/i }));
+
+  expect(headingsInOrder()).toEqual(['Divisive post', 'Liked post', 'Quiet post']); // 5, 4, 1
+});
+
+// test 3: posts with the same total keep the feed's newest-first order rather than being shuffled
+test('Most Visited keeps newest first for posts with the same number of reactions', async () => {
+  const user = userEvent.setup();
+  const tiedPosts = [
+    { id: 'x', postedBy: 'user1', postHeading: 'Newer tie', content: 'c', category: 'Games', likes: 2, dislikes: 0 },
+    { id: 'y', postedBy: 'user2', postHeading: 'Busy post', content: 'c', category: 'Games', likes: 9, dislikes: 0 },
+    { id: 'z', postedBy: 'user3', postHeading: 'Older tie', content: 'c', category: 'Games', likes: 1, dislikes: 1 },
+  ];
+  render(<PostFeed posts={tiedPosts} />);
+
+  await user.click(screen.getByRole('button', { name: /most visited/i }));
+
+  expect(headingsInOrder()).toEqual(['Busy post', 'Newer tie', 'Older tie']); // the two posts on 2 stay in their original order
+});
+
+// test 4: search still narrows the results
+test('Most Visited still applies the search', async () => {
+  const user = userEvent.setup();
+  render(<PostFeed posts={postsForSorting} searchTerm="d" />); // "d" is in "Liked post" and "Divisive post" but not "Quiet post"
+
+  await user.click(screen.getByRole('button', { name: /most visited/i }));
+
+  expect(headingsInOrder()).toEqual(['Divisive post', 'Liked post']); // only the matches, still sorted
+});
+
+// test 5: sorting must not reorder the original list - going back to All shows newest first again
+test('going from Most Visited back to All restores the newest-first order', async () => {
+  const user = userEvent.setup();
+  render(<PostFeed posts={postsForSorting} />);
+
+  await user.click(screen.getByRole('button', { name: /most visited/i }));
+  await user.click(screen.getByRole('button', { name: /^all$/i }));
+
+  expect(headingsInOrder()).toEqual(['Quiet post', 'Liked post', 'Divisive post']); // exactly as they were passed in
+  expect(postsForSorting.map((post) => post.postHeading)).toEqual(['Quiet post', 'Liked post', 'Divisive post']); // and the array itself is unchanged
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
+
 // categoryFilter component tests ----------------------------------------------------------------------------------------------------
 // test 1: renders a button for each category plus "All"
 test('renders a button for each category plus "All"', () => {
