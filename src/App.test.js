@@ -7,6 +7,7 @@ import LoginForm from './components/LoginForm/LoginForm';
 import SignUpForm from './components/SignUpForm/SignUpForm';
 import Post from './components/Post/Post';
 import PostFeed from './components/PostFeed/PostFeed';
+import DetailedPost from './components/DetailedPost/DetailedPost';
 import CategoryFilter from './components/CategoryFilter/CategoryFilter';
 import App from './App';
 
@@ -1009,6 +1010,141 @@ test('the feed request sends the token when logged in', async () => {
   await screen.findByText(/no posts to show yet/i);
   expect(global.fetch).toHaveBeenCalledWith('/api/posts', { headers: { Authorization: `Bearer ${token}` } });
 });
+
+// comments (DetailedPost modal) -----------------------------------------------------------------------------------------------------
+// the modal loads the post's comments from GET /api/posts/:id/comments, and logged in users can add one with POST to the same path
+const mockComments = [
+  { id: 1, postedBy: 'first_commenter', content: 'Great post!', createdAt: '2026-06-01T10:00:00Z' },
+  { id: 2, postedBy: 'second_commenter', content: 'I agree', createdAt: '2026-06-01T11:00:00Z' },
+];
+
+// renders the modal on its own - onClose and onLoginRequired can be swapped for jest.fn() when a test needs to check them
+const renderDetailedPost = (props = {}) =>
+  render(<DetailedPost post={mockPost} onClose={() => {}} {...props} />); // {...props} spreads any extra props passed in on top
+
+// test 1: the request goes to the right post's comments
+test('requests the post\'s comments when the modal opens', async () => {
+  renderDetailedPost();
+
+  await screen.findByText(/no comments yet/i); // wait for the default (empty) reply to be handled
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts/1/comments'); // mockPost has id '1'
+});
+
+// test 2: the comments the server sends back are listed, with who wrote each one
+test('shows the comments returned by the server', async () => {
+  mockFetchResponse(200, mockComments);
+  renderDetailedPost();
+
+  expect(await screen.findByText('Great post!')).toBeInTheDocument();
+  expect(screen.getByText('first_commenter')).toBeInTheDocument();
+  expect(screen.getByText('I agree')).toBeInTheDocument();
+  expect(screen.getByText('second_commenter')).toBeInTheDocument();
+});
+
+// test 3: an empty list gets a friendly message rather than a blank space
+test('shows a message when a post has no comments', async () => {
+  renderDetailedPost(); // the default fetch mock replies with []
+
+  expect(await screen.findByText(/no comments yet/i)).toBeInTheDocument();
+});
+
+// test 4: something is shown while waiting
+test('shows a loading message while the comments are loading', () => {
+  global.fetch.mockReturnValueOnce(new Promise(() => {})); // never settles
+  renderDetailedPost();
+
+  expect(screen.getByText(/loading comments/i)).toBeInTheDocument();
+});
+
+// test 5: the server can't be reached
+test('shows an error when the comments cannot be loaded', async () => {
+  global.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  renderDetailedPost();
+
+  expect(await screen.findByText(/could not load comments/i)).toBeInTheDocument();
+});
+
+// test 6: logged out users see a prompt instead of the comment box
+test('asks logged out users to log in instead of showing the comment box', async () => {
+  const user = userEvent.setup();
+  const handleLoginRequired = jest.fn();
+  renderDetailedPost({ onLoginRequired: handleLoginRequired });
+
+  await screen.findByText(/no comments yet/i);
+  expect(screen.queryByLabelText(/add a comment/i)).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /log in to comment/i }));
+  expect(handleLoginRequired).toHaveBeenCalled();
+});
+
+// test 7: the request matches what routes/comments.js and requireAuth expect
+test('submitting a comment sends it and the token to the server', async () => {
+  const user = userEvent.setup();
+  const token = loginBeforeRender();
+  renderDetailedPost();
+  await screen.findByText(/no comments yet/i);
+
+  mockFetchResponse(201, { id: 3, postedBy: 'testuser', content: 'My comment', createdAt: '2026-06-02T09:00:00Z' });
+  await user.type(screen.getByLabelText(/add a comment/i), 'My comment');
+  await user.click(screen.getByRole('button', { name: /^comment$/i }));
+
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts/1/comments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ content: 'My comment' }),
+  });
+});
+
+// test 8: the new comment joins the END of the list (oldest first), and the box empties ready for another
+test('a new comment appears at the bottom of the list and the box is cleared', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  mockFetchResponse(200, mockComments);
+  renderDetailedPost();
+  await screen.findByText('Great post!');
+
+  mockFetchResponse(201, { id: 3, postedBy: 'testuser', content: 'My comment', createdAt: '2026-06-02T09:00:00Z' });
+  await user.type(screen.getByLabelText(/add a comment/i), 'My comment');
+  await user.click(screen.getByRole('button', { name: /^comment$/i }));
+
+  expect(await screen.findByText('My comment')).toBeInTheDocument();
+  const contents = screen.getAllByTestId('comment-content').map((element) => element.textContent); // every comment's text, in page order
+  expect(contents).toEqual(['Great post!', 'I agree', 'My comment']);
+  expect(screen.getByLabelText(/add a comment/i)).toHaveValue('');
+});
+
+// test 9: an empty comment is caught in the browser
+test('shows an error and sends nothing when the comment is empty', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  renderDetailedPost();
+  await screen.findByText(/no comments yet/i);
+
+  await user.type(screen.getByLabelText(/add a comment/i), '   '); // only spaces
+  await user.click(screen.getByRole('button', { name: /^comment$/i }));
+
+  expect(screen.getByText(/comment cannot be empty/i)).toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalledWith('/api/posts/1/comments', expect.objectContaining({ method: 'POST' }));
+});
+
+// test 10: the server rejects the comment - its message shows and what they typed is kept
+test('shows the server\'s error and keeps the text when a comment is rejected', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  renderDetailedPost();
+  await screen.findByText(/no comments yet/i);
+
+  mockFetchResponse(401, { error: 'Your session has expired, please log in again' });
+  await user.type(screen.getByLabelText(/add a comment/i), 'My comment');
+  await user.click(screen.getByRole('button', { name: /^comment$/i }));
+
+  expect(await screen.findByText(/your session has expired/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/add a comment/i)).toHaveValue('My comment');
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
 
 // test 12: basic multiplicity
 test('renders a Post for each item in the posts array', () => {

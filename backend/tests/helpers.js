@@ -49,4 +49,15 @@ async function react(user, post, type) {
   await pool.query('INSERT INTO reactions (post_id, user_id, type) VALUES ($1, $2, $3)', [post.id, user.id, type]);
 }
 
-module.exports = { pool, resetDatabase, createUser, tokenFor, createPost, react };
+// inserts a comment directly - createdAt is optional so tests can control the order comments were written in
+async function createComment(user, post, content, createdAt) {
+  const result = await pool.query(
+    `INSERT INTO comments (post_id, user_id, content, created_at)
+     VALUES ($1, $2, $3, COALESCE($4, NOW()))
+     RETURNING id`,
+    [post.id, user.id, content, createdAt || null]
+  );
+  return result.rows[0];
+}
+
+module.exports = { pool, resetDatabase, createUser, tokenFor, createPost, react, createComment };

@@ -4,6 +4,7 @@ require('./loadEnv'); // loads .env (or .env.test when running tests)
 
 const authRoutes = require('./routes/auth'); // loads the auth.js file (gives whatever that file exports) and stores it in a variable
 const postsRoutes = require('./routes/posts');
+const commentsRoutes = require('./routes/comments');
 
 const app = express(); // calling express creates the application object
 app.use(cors()); // "app" is what routes and middleware are attached to and is listening for requests - everything builds on top of "app"
@@ -12,6 +13,7 @@ app.use(express.json()); // enables JSON body parsing - when the React app sends
 
 app.use('/api', authRoutes); // connects the routes to the server
 app.use('/api/posts', postsRoutes); // every route in posts.js starts with /api/posts - so router.get('/') in that file is GET /api/posts
+app.use('/api/posts/:id/comments', commentsRoutes); // comments belong to a post, so they live under its path - :id is read in comments.js thanks to mergeParams
 
 // defined route
 app.get('/api/health', (req, res) => {

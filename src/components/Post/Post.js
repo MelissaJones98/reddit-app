@@ -85,7 +85,7 @@ function Post({ post, onLoginRequired }) {
       {reactionError && <p className="form-error">{reactionError}</p>} {/* form-error is the shared red error style from LoginForm.css */}
 
       {isCommentsOpen && (
-        <DetailedPost post={post} onClose={() => setIsCommentsOpen(false)} />
+        <DetailedPost post={post} onClose={() => setIsCommentsOpen(false)} onLoginRequired={onLoginRequired} />
       )} {/* conditional rendering - if truthy DetailedPost renders if falsy it does not */}
     </article>
   );
