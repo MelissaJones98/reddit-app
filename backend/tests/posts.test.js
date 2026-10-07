@@ -66,6 +66,55 @@ describe('GET /api/posts', () => {
   });
 });
 
+// GET /api/posts/:id -----------------------------------------------------------------------------------------------------------------
+// one post on its own - used when someone opens a shared link like /post/12
+describe('GET /api/posts/:id', () => {
+  test('returns the post in the same shape as the feed', async () => {
+    const author = await createUser('author');
+    const fan = await createUser('fan');
+    const post = await createPost(author, { heading: 'Shared post', content: 'Worth a link', category: 'Science' });
+    await react(fan, post, 'like');
+
+    const res = await request(app).get(`/api/posts/${post.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: post.id,
+      postedBy: 'author',
+      postHeading: 'Shared post',
+      content: 'Worth a link',
+      category: 'Science',
+      likes: 1,
+      dislikes: 0,
+      userReaction: null, // no token sent
+    });
+  });
+
+  test('includes the viewer\'s own reaction when they send a token', async () => {
+    const author = await createUser('author');
+    const viewer = await createUser('viewer');
+    const post = await createPost(author, { heading: 'Shared post' });
+    await react(viewer, post, 'dislike');
+
+    const res = await request(app).get(`/api/posts/${post.id}`).set('Authorization', `Bearer ${tokenFor(viewer)}`);
+
+    expect(res.body.userReaction).toBe('dislike');
+  });
+
+  test('returns 404 for a post that doesn\'t exist', async () => {
+    const res = await request(app).get('/api/posts/999999');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toEqual(expect.any(String));
+  });
+
+  test('returns 404 for an id that isn\'t a number', async () => {
+    const res = await request(app).get('/api/posts/not-a-number');
+
+    expect(res.status).toBe(404); // not a 500 - Postgres would throw if 'not-a-number' reached an integer column
+  });
+});
+
 // POST /api/posts --------------------------------------------------------------------------------------------------------------------
 describe('POST /api/posts', () => {
   const validPost = { postHeading: 'My new post', content: 'Some interesting content', category: 'Technology' };

@@ -7,6 +7,7 @@ import LoginForm from './components/LoginForm/LoginForm';
 import SignUpForm from './components/SignUpForm/SignUpForm';
 import PostFeed from './components/PostFeed/PostFeed';
 import CreatePostForm from './components/CreatePostForm/CreatePostForm';
+import PostPage from './components/PostPage/PostPage';
 
 // reads the payload ({ id, username, iat, exp }) out of a token, or returns null if it isn't a well-formed JWT
 // used by isTokenValid (on page load) and by the expiry timer in App (while the app is open)
@@ -79,7 +80,6 @@ function App() {
 
     const msUntilExpiry = payload.exp * 1000 - Date.now(); // exp is in seconds, Date.now() in milliseconds
 
-    // TODO(human): start a timer that calls handleSessionExpired after msUntilExpiry, and return a cleanup function that cancels it
     const timerId = setTimeout(handleSessionExpired, msUntilExpiry);
     return () => clearTimeout(timerId); // cancels the timer if login status changes to logged out
   }, [isLoggedIn, handleSessionExpired]);
@@ -179,6 +179,10 @@ function App() {
         <Route
           path="/signup"
           element={<SignUpForm onSignUpSuccess={handleSignUpSuccess} />}
+        />
+        <Route
+          path="/post/:id" // :id is a URL parameter - /post/12 matches, and PostPage reads '12' with useParams
+          element={<PostPage onLoginRequired={() => navigate('/login')} />}
         />
         <Route
           path="/create"

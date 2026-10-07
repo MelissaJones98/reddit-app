@@ -1267,6 +1267,97 @@ test('shows the server\'s error and keeps the text when a comment is rejected', 
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
 
+// shared post page (/post/:id) --------------------------------------------------------------------------------------------------------
+// the Share button copies /post/:id - opening that link shows the one post on its own page
+
+// on this page App loads the feed AND the page loads its post at the same time, so instead of queuing replies in order (mockFetchResponse),
+// each URL gets its own reply - any URL not listed gets the usual empty 200 []
+// a reply can be { status, body }, an Error (fetch throws, like no connection), or 'pending' (never answers)
+const mockFetchByUrl = (replies) => {
+  global.fetch.mockImplementation(async (url) => {
+    const reply = replies[url];
+    if (reply instanceof Error) throw reply;
+    if (reply === 'pending') return new Promise(() => {});
+    const { status = 200, body = [] } = reply || {};
+    return { ok: status >= 200 && status < 300, status, json: async () => body };
+  });
+};
+
+const renderAt = (path) =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+    </MemoryRouter>
+  );
+
+// test 1: the right post is requested - with no token when logged out, like the feed
+test('opening a shared link requests that post from the server', async () => {
+  mockFetchByUrl({ '/api/posts/1': { body: mockPost } });
+  renderAt('/post/1');
+
+  await screen.findByText('This is the post content.');
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts/1', { headers: {} });
+});
+
+// test 2: logged in visitors send their token so the server can include their userReaction
+test('opening a shared link sends the token when logged in', async () => {
+  const token = loginBeforeRender();
+  mockFetchByUrl({ '/api/posts/1': { body: mockPost } });
+  renderAt('/post/1');
+
+  await screen.findByText('This is the post content.');
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts/1', { headers: { Authorization: `Bearer ${token}` } });
+});
+
+// test 3: the post is shown as a normal post card, so Like, Comments and Share all work on it
+test('shows the shared post', async () => {
+  mockFetchByUrl({ '/api/posts/1': { body: mockPost } });
+  renderAt('/post/1');
+
+  expect(await screen.findByText('My First Post')).toBeInTheDocument();
+  expect(screen.getByText('This is the post content.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^like/i })).toBeInTheDocument();
+});
+
+// test 4: something is shown while waiting
+test('shows a loading message while the shared post loads', () => {
+  mockFetchByUrl({ '/api/posts/1': 'pending' });
+  renderAt('/post/1');
+
+  expect(screen.getByText(/loading post/i)).toBeInTheDocument();
+});
+
+// test 5: a link to a post that doesn't exist (deleted, or a mistyped link) says so, rather than a blank page or a vague error
+test('shows "post not found" for a post that doesn\'t exist', async () => {
+  mockFetchByUrl({ '/api/posts/999': { status: 404, body: { error: 'Post not found' } } });
+  renderAt('/post/999');
+
+  expect(await screen.findByText(/post not found/i)).toBeInTheDocument();
+  expect(screen.queryByText(/could not load this post/i)).not.toBeInTheDocument(); // a missing post isn't a connection problem
+});
+
+// test 6: the server can't be reached - a different message from "not found", because trying again might work
+test('shows an error when the shared post cannot be loaded', async () => {
+  mockFetchByUrl({ '/api/posts/1': new TypeError('Failed to fetch') });
+  renderAt('/post/1');
+
+  expect(await screen.findByText(/could not load this post/i)).toBeInTheDocument();
+  expect(screen.queryByText(/post not found/i)).not.toBeInTheDocument();
+});
+
+// test 7: a way back to the rest of the app - someone arriving from a shared link has no feed "behind" them to go back to
+test('Back to all posts returns to the feed', async () => {
+  const user = userEvent.setup();
+  mockFetchByUrl({ '/api/posts/1': { body: mockPost }, '/api/posts': { body: mockPosts } });
+  renderAt('/post/1');
+  await screen.findByText('This is the post content.');
+
+  await user.click(screen.getByRole('button', { name: /back to all posts/i }));
+
+  expect(await screen.findByText('A Second Post')).toBeInTheDocument(); // only in the feed, not on the shared post page
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
+
 // test 12: basic multiplicity
 test('renders a Post for each item in the posts array', () => {
   render(<PostFeed posts={mockPosts} />); // renders PostFeed with the two item array

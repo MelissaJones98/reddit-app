@@ -36,6 +36,7 @@ my forms will need to do genuine authentication.
 - Like and dislike posts - one reaction per user per post, saved on the server, with the user's own reaction highlighted
 - Read the comments on a post in a modal, and add comments when logged in
 - Logged out users who try to react or comment are sent to the login form
+- Share a post: the Share button copies a link (e.g. `/post/12`) that opens the post on its own page
 
 ## Wireframe
 ![Reddit App Wireframe](./redditApp.drawio.png)
@@ -107,6 +108,7 @@ All routes start with `/api`. "Token" means the request needs an `Authorization:
 | `POST` | `/api/signup` | No | Creates an account from `{ username, email, password }` and returns `{ token, user }` |
 | `POST` | `/api/login` | No | Checks `{ username, password }` and returns `{ token, user }` |
 | `GET` | `/api/posts` | Optional | Every post, newest first, with the author, like/dislike counts and (when a token is sent) the viewer's own `userReaction` |
+| `GET` | `/api/posts/:id` | Optional | One post in the same shape as the feed (used by shared links), or 404 if it doesn't exist |
 | `POST` | `/api/posts` | Yes | Creates a post from `{ postHeading, content, category }` - the author is taken from the token |
 | `POST` | `/api/posts/:id/reactions` | Yes | Sends `{ type: 'like' \| 'dislike' }` - adds, removes or switches the user's reaction and returns `{ likes, dislikes, userReaction }` |
 | `GET` | `/api/posts/:id/comments` | No | A post's comments, oldest first |
@@ -181,8 +183,8 @@ The project is built test-first (TDD): each feature starts as failing tests, the
 
 | Suite | Where | Tests | Covers |
 |---|---|---|---|
-| Frontend | `src/App.test.js` | 80 | Search, login/sign up/logout, staying logged in after a refresh, logging out when the token expires, loading the feed, creating posts, reactions, comments, the category filter, Most Visited |
-| Backend | `backend/tests/posts.test.js` | 10 | Reading the feed and creating posts (including auth and validation) |
+| Frontend | `src/App.test.js` | 87 | Search, login/sign up/logout, staying logged in after a refresh, logging out when the token expires, loading the feed, creating posts, reactions, comments, the category filter, Most Visited, the shared post page |
+| Backend | `backend/tests/posts.test.js` | 14 | Reading the feed and single posts, and creating posts (including auth and validation) |
 | Backend | `backend/tests/reactions.test.js` | 15 | Adding, removing and switching reactions, and `userReaction` in the feed |
 | Backend | `backend/tests/comments.test.js` | 12 | Reading and adding comments (including auth and validation) |
 
@@ -242,7 +244,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO re
 - **A test that passed by accident**: a typo (`setsPostsError`) threw an error that the `catch` block turned into the expected message. Spotted by reading the code, not the test result - a reminder that a `try`/`catch` catches your own mistakes too
 
 ## Future Work
-- Make the Share link (`/post/:id`) open the post - it's copied to the clipboard but there's no route for it yet
+- When deploying, configure the host to serve `index.html` for every page address ("SPA fallback") so shared `/post/:id` links load the app instead of a 404
 - Get a custom domain name and use it for your application
 - Set up a CI/CD workflow to automatically deploy your application when the master branch in the repository changes
 - Make the application a progressive web app

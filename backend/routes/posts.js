@@ -45,6 +45,33 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
+// get one post - public, used when someone opens a shared link like /post/12
+// optionalAuth again, so a logged in viewer still sees which reaction they've chosen
+router.get('/:id', optionalAuth, async (req, res) => {
+  const postId = Number(req.params.id);
+  if (!Number.isInteger(postId)) {
+    return res.status(404).json({ error: 'Post not found' }); // e.g. /api/posts/abc - checked here because Postgres would throw a 500 if 'abc' reached the integer id column
+  }
+
+  try {
+    const result = await pool.query(
+      `${SELECT_POSTS}
+       WHERE p.id = $2
+       GROUP BY p.id, u.username`,
+      [req.user ? req.user.id : null, postId] // $1 = the viewer (or null), $2 = the post - the same order as the create route
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' }); // a valid number, but no post has it (e.g. it was deleted)
+    }
+
+    res.json(result.rows[0]); // one object, not an array
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
 // create a post - requireAuth runs first, so this handler only runs for logged in users and req.user holds who they are
 router.post('/', requireAuth, async (req, res) => {
   const { postHeading, content, category } = req.body; // postedBy is deliberately NOT read from the body - the author always comes from the verified token
