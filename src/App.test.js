@@ -188,7 +188,7 @@ test('requests the posts from /api/posts when the app loads', async () => {
   );
 
   await screen.findByText(/no posts to show yet/i); // wait for the (empty, default) response to be handled before the test ends
-  expect(global.fetch).toHaveBeenCalledWith('/api/posts');
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts', { headers: {} }); // logged out - no Authorization header
 });
 
 // test 2: the posts the server sends back appear in the feed
@@ -795,30 +795,37 @@ test('renders Like, Dislike, Comments and Share buttons', () => {
   expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
 });
 
-// test 3: clicking Like updates the displayed count
+// reactions now go through the server: Post sends the click to POST /api/posts/:id/reactions and shows the totals the server sends back
+// the toggle rules themselves (add / remove / switch) are tested in backend/tests/reactions.test.js, because that's where they live now
+
+// test 3: clicking Like shows the server's new count
 // confirms the count starts at 0 - using { selector: '.like-count' } as a second argument to getByText narrows the search to only elements with that class
-test('clicking Like increments the like count', async () => {
+test('clicking Like shows the like count returned by the server', async () => {
   const user = userEvent.setup();
+  loginBeforeRender(); // reacting needs a token
   render(<Post post={mockPost} />);
 
   expect(screen.getByText('0', { selector: '.like-count' })).toBeInTheDocument();
 
+  mockFetchResponse(200, { likes: 1, dislikes: 0, userReaction: 'like' });
   await user.click(screen.getByRole('button', { name: /^like/i })); // checked with this unique identifer so two items aren't accidentally matched
 
-  expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument();
+  expect(await screen.findByText('1', { selector: '.like-count' })).toBeInTheDocument(); // findBy - the count changes once the server replies
 });
 
-// test 4: clicking Dislike updates the displayed count
-// confirms the count starts at 0 and targets .dislike-count (doesnt need anchoring since dislike is the longer more specific string)
-test('clicking Dislike increments the dislike count', async () => {
+// test 4: clicking Dislike shows the server's new count
+// targets .dislike-count (doesnt need anchoring since dislike is the longer more specific string)
+test('clicking Dislike shows the dislike count returned by the server', async () => {
   const user = userEvent.setup();
+  loginBeforeRender();
   render(<Post post={mockPost} />);
 
   expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument();
 
+  mockFetchResponse(200, { likes: 0, dislikes: 1, userReaction: 'dislike' });
   await user.click(screen.getByRole('button', { name: /dislike/i }));
 
-  expect(screen.getByText('1', { selector: '.dislike-count' })).toBeInTheDocument();
+  expect(await screen.findByText('1', { selector: '.dislike-count' })).toBeInTheDocument();
 });
 
 // test 5: commments opens a modal
@@ -854,91 +861,153 @@ test('clicking Share copies the post link to the clipboard', async () => {
 
 // test 7: considers there may already be likes/dislikes on a post before the user clicks the buttons
 // would catch bugs like " the count always resets to 1 instead of incrementing from whatever it started at"
-test('like and dislike counts start at the post\'s existing values and increment from there', async () => {
+test('like and dislike counts start at the post\'s existing values and update from the server\'s replies', async () => {
   const user = userEvent.setup();
+  loginBeforeRender();
   render(<Post post={mockPostWithCounts} />);
 
   // starts at the post's existing counts, not zero
   expect(screen.getByText('5', { selector: '.like-count' })).toBeInTheDocument(); // checks the initial render - does the componenet correctly display the current counts?
   expect(screen.getByText('2', { selector: '.dislike-count' })).toBeInTheDocument();
 
-  // click like button
-  await user.click(screen.getByRole('button', { name: /^like/i })); 
+  // click like button - the server adds the like to the existing 5
+  mockFetchResponse(200, { likes: 6, dislikes: 2, userReaction: 'like' });
+  await user.click(screen.getByRole('button', { name: /^like/i }));
 
-  // checks that the likes incremented by 1 and the dislikes stayed the same because only the like button was clicked
-  expect(screen.getByText('6', { selector: '.like-count' })).toBeInTheDocument(); 
+  // checks that the likes went up by 1 and the dislikes stayed the same because only the like button was clicked
+  expect(await screen.findByText('6', { selector: '.like-count' })).toBeInTheDocument();
   expect(screen.getByText('2', { selector: '.dislike-count' })).toBeInTheDocument();
 
-  // click the dislike button
-  await user.click(screen.getByRole('button', { name: /dislike/i })); 
+  // click the dislike button - the server switches the like to a dislike (the one reaction per user rule)
+  mockFetchResponse(200, { likes: 5, dislikes: 3, userReaction: 'dislike' });
+  await user.click(screen.getByRole('button', { name: /dislike/i }));
 
-  // checks that the likes decremented by 1 and the dislikes incremented by 1 because the dislike button was clicked after the user had already clicked the like button - this checks the one reaction per user rule as well as the switch function
-  expect(screen.getByText('5', { selector: '.like-count' })).toBeInTheDocument(); 
+  // checks the display follows the server's switch: likes back down by 1, dislikes up by 1
+  expect(await screen.findByText('5', { selector: '.like-count' })).toBeInTheDocument();
   expect(screen.getByText('3', { selector: '.dislike-count' })).toBeInTheDocument();
 });
 
-// When the like and dislike buttons are clicked a second time the like or dislike that the user added should be removed. 
-// Also the user should only be able to add a like OR a dislike NOT both
-// test 8
-test('clicking Like a second time removes the like', async () => {
+// test 8: the request matches what routes/posts.js and requireAuth expect
+test('clicking Like sends the reaction and the token to the server', async () => {
   const user = userEvent.setup();
+  const token = loginBeforeRender();
   render(<Post post={mockPost} />);
 
-  const likeButton = screen.getByRole('button', { name: /^like/i }); // saves the current count to a variable
+  mockFetchResponse(200, { likes: 1, dislikes: 0, userReaction: 'like' });
+  await user.click(screen.getByRole('button', { name: /^like/i }));
 
-  await user.click(likeButton);
-  expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument(); // checks the new count has been incremented by 1
-
-  await user.click(likeButton);
-  expect(screen.getByText('0', { selector: '.like-count' })).toBeInTheDocument(); // checks the new count has been decremented by 1
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts/1/reactions', { // mockPost has id '1'
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ type: 'like' }),
+  });
 });
 
-// test 9
-test('clicking Dislike a second time removes the dislike', async () => {
+// test 9: the button the user has pressed is marked, using aria-pressed like the category buttons
+test('marks the user\'s reaction as pressed using the server\'s reply', async () => {
   const user = userEvent.setup();
+  loginBeforeRender();
   render(<Post post={mockPost} />);
 
-  const dislikeButton = screen.getByRole('button', { name: /dislike/i }); // saves the current count to a variable
+  expect(screen.getByRole('button', { name: /^like/i })).toHaveAttribute('aria-pressed', 'false');
 
-  await user.click(dislikeButton);
-  expect(screen.getByText('1', { selector: '.dislike-count' })).toBeInTheDocument(); // checks the new count has been incremented by 1
+  mockFetchResponse(200, { likes: 1, dislikes: 0, userReaction: 'like' });
+  await user.click(screen.getByRole('button', { name: /^like/i }));
 
-  await user.click(dislikeButton);
-  expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument(); // checks the new count has been decremented by 1
+  expect(await screen.findByRole('button', { name: /^like/i, pressed: true })).toBeInTheDocument(); // pressed: true finds the button only once aria-pressed is "true"
+  expect(screen.getByRole('button', { name: /dislike/i })).toHaveAttribute('aria-pressed', 'false');
 });
 
-// test 10
-test('clicking Dislike after Like removes the like and adds a dislike instead', async () => {
+// test 10: after a refresh the feed says which button the user pressed before (userReaction from GET /api/posts)
+test('shows the user\'s existing reaction from the feed as pressed', () => {
+  render(<Post post={{ ...mockPostWithCounts, userReaction: 'dislike' }} />); // a copy of the post with userReaction added
+
+  expect(screen.getByRole('button', { name: /dislike/i })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: /^like/i })).toHaveAttribute('aria-pressed', 'false');
+});
+
+// test 11: logged out users are asked to log in instead - nothing is sent and the counts don't change
+test('clicking Like while logged out asks the user to log in', async () => {
   const user = userEvent.setup();
-  render(<Post post={mockPost} />);
+  const handleLoginRequired = jest.fn(); // stands in for App's "go to the login form"
+  render(<Post post={mockPost} onLoginRequired={handleLoginRequired} />); // no loginBeforeRender - logged out
 
-  const likeButton = screen.getByRole('button', { name: /^like/i }); // stores the current counts for both like and dislike in variables
-  const dislikeButton = screen.getByRole('button', { name: /dislike/i });
+  await user.click(screen.getByRole('button', { name: /^like/i }));
 
-  await user.click(likeButton); // clicks like button and checks that like incremented by 1
-  expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument();
-  expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument();
-
-  await user.click(dislikeButton); // clicks dislike button and checks that like decremented by 1 and dislike incremented by 1
+  expect(handleLoginRequired).toHaveBeenCalled();
+  expect(global.fetch).not.toHaveBeenCalled();
   expect(screen.getByText('0', { selector: '.like-count' })).toBeInTheDocument();
-  expect(screen.getByText('1', { selector: '.dislike-count' })).toBeInTheDocument();
 });
 
-// test 11
-test('clicking Like after Dislike removes the dislike and adds a like instead', async () => {
+// test 11a: the other side of test 11 - a logged in user's click goes to the server, NOT to the login form
+test('clicking Like while logged in does not ask the user to log in', async () => {
   const user = userEvent.setup();
+  loginBeforeRender();
+  const handleLoginRequired = jest.fn();
+  render(<Post post={mockPost} onLoginRequired={handleLoginRequired} />); // the prop IS passed, like it is in the real feed
+
+  mockFetchResponse(200, { likes: 1, dislikes: 0, userReaction: 'like' });
+  await user.click(screen.getByRole('button', { name: /^like/i }));
+
+  expect(await screen.findByText('1', { selector: '.like-count' })).toBeInTheDocument();
+  expect(handleLoginRequired).not.toHaveBeenCalled();
+});
+
+// test 11b: the server rejects the reaction (e.g. expired session) - its message shows and the counts stay as they were
+test('shows the server\'s error and keeps the counts when a reaction is rejected', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  render(<Post post={mockPostWithCounts} />);
+
+  mockFetchResponse(401, { error: 'Your session has expired, please log in again' });
+  await user.click(screen.getByRole('button', { name: /^like/i }));
+
+  expect(await screen.findByText(/your session has expired/i)).toBeInTheDocument();
+  expect(screen.getByText('5', { selector: '.like-count' })).toBeInTheDocument(); // unchanged
+});
+
+// test 11c: the server can't be reached
+test('shows an error when the server cannot be reached while reacting', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
   render(<Post post={mockPost} />);
 
-  const likeButton = screen.getByRole('button', { name: /^like/i }); // stores the current counts for both like and dislike in variables
-  const dislikeButton = screen.getByRole('button', { name: /dislike/i });
+  global.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  await user.click(screen.getByRole('button', { name: /^like/i }));
 
-  await user.click(dislikeButton); // clicks dislike button and checks that dislike incremented by 1
-  expect(screen.getByText('0', { selector: '.like-count' })).toBeInTheDocument();
-  expect(screen.getByText('1', { selector: '.dislike-count' })).toBeInTheDocument();
+  expect(await screen.findByText(/could not connect to the server/i)).toBeInTheDocument();
+});
 
-  await user.click(likeButton); // clicks like button and checks that dislike decremented by 1 and like incremented by 1
-  expect(screen.getByText('1', { selector: '.like-count' })).toBeInTheDocument();
-  expect(screen.getByText('0', { selector: '.dislike-count' })).toBeInTheDocument();
+// test 11d: FULL FLOW - in the real app, a logged out click on Like in the feed opens the login form
+test('clicking Like in the feed while logged out opens the login form', async () => {
+  const user = userEvent.setup();
+  mockFetchResponse(200, mockPosts);
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  await screen.findByText('My First Post');
+  await user.click(screen.getAllByRole('button', { name: /^like/i })[0]); // getAll - every post has a Like button, [0] is the first post's
+
+  expect(screen.getByRole('heading', { name: /log in/i })).toBeInTheDocument();
+});
+
+// test 11e: the feed request includes the token when logged in, so the server can fill in userReaction
+test('the feed request sends the token when logged in', async () => {
+  const token = loginBeforeRender();
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  await screen.findByText(/no posts to show yet/i);
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts', { headers: { Authorization: `Bearer ${token}` } });
 });
 
 // test 12: basic multiplicity

@@ -4,7 +4,7 @@ import CategoryFilter from '../CategoryFilter/CategoryFilter';
 import './PostFeed.css';
 import { FEED_CATEGORIES } from '../../constants/categories'; // shared with the Create Post form
 
-function PostFeed({ posts, searchTerm = '' }) { // searchTerm comes from App (typed into the Banner) - defaults to '' so PostFeed still works if it isn't passed
+function PostFeed({ posts, searchTerm = '', onLoginRequired }) { // onLoginRequired is passed straight through to each Post // searchTerm comes from App (typed into the Banner) - defaults to '' so PostFeed still works if it isn't passed
   const [activeCategory, setActiveCategory] = useState('All');
 
   // a post is shown only if it passes BOTH filters
@@ -29,7 +29,7 @@ function PostFeed({ posts, searchTerm = '' }) { // searchTerm comes from App (ty
       ) : (
         <div className="post-feed">
           {filteredPosts.map((post) => ( // map() runs a function on every item in an array and returns a new array containing whatever that function returned for each one
-            <Post key={post.id} post={post} /> // each item in the array is assigned an id so the data rendered is the correct data for that id 
+            <Post key={post.id} post={post} onLoginRequired={onLoginRequired} /> // each item in the array is assigned an id so the data rendered is the correct data for that id 
           ))}
         </div>
       )}

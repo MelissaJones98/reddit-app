@@ -61,7 +61,11 @@ function App() {
     setPostsError(''); // clear an old error when trying again
 
     try {
-      const response = await fetch('/api/posts'); // GET is fetch's default, so no options are needed - and no token, reading the feed is public
+      // reading the feed is public, but sending the token (when there is one) lets the server include which posts THIS user has liked/disliked
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/posts', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}, // GET is fetch's default method, so only the headers need setting
+      });
       const data = await response.json(); // an array of posts on success, or { error } on failure
 
       if (response.ok) {
@@ -79,9 +83,10 @@ function App() {
 
   // useEffect runs code AFTER the component appears on screen - here, it requests the feed once when App first loads
   // (fetching directly in the component body would run on every render, and each response would update state, causing another render... forever)
+  // isLoggedIn is listed too, so the feed reloads after logging in or out - the server's userReaction on each post depends on who's asking
   useEffect(() => {
     loadPosts();
-  }, [loadPosts]);
+  }, [loadPosts, isLoggedIn]);
 
   // newPost is the post the server sent back from POST /api/posts - same shape as the posts in the feed
   const handlePostCreated = (newPost) => {
@@ -105,7 +110,7 @@ function App() {
       </div>
     );
   } else {
-    homePage = <PostFeed posts={posts} searchTerm={searchTerm} />;
+    homePage = <PostFeed posts={posts} searchTerm={searchTerm} onLoginRequired={() => navigate('/login')} />; // logged out users who try to react are sent to log in
   }
   // ---------------------------------------------------------------------------------------------------------------------------------------------
 

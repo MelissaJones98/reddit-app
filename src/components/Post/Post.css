@@ -32,7 +32,15 @@
 }
 
 .post-actions .btn {
-  padding: 8px 14px; 
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+/* the user's own reaction - outlined in light text so it stands out from the plain orange buttons */
+.post-actions .btn[aria-pressed="true"] {
+  background-color: #1b1e21;
+  color: rgb(216, 108, 8);
+  box-shadow: inset 0 0 0 2px rgb(216, 108, 8); /* an inset shadow draws a border without changing the button's size */
 }
 
 .like-count,
