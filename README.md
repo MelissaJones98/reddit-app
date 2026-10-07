@@ -1,7 +1,7 @@
 # Codecademy Off-Platform Project: Reddit App
 
 ## Description
-A Reddit clone application using React and Redux. The application will allow users to view and search posts and comments provided by the API.
+A Reddit clone application using React and Redux. The application will allow users to view and search posts and comments provided by its own API (Node.js, Express and PostgreSQL).
 Please note that credit for any branding and the logo goes to Reddit. 
 
 ** **PLEASE NOTE**
@@ -24,6 +24,16 @@ my forms will need to do genuine authentication.
 - Users are delighted with a cohesive design system
 - Users are delighted with animations and transitions
 - Users are able to leave an error state
+
+### Built so far
+- Sign up and log in with real accounts (passwords hashed with bcrypt, logins proven with a JWT that lasts 7 days)
+- Staying logged in after a page refresh, until the token expires
+- A feed of posts loaded from the database, newest first, with loading and error states and a **Try again** button
+- Search posts by heading, and filter them by category (both work together)
+- Create a post (logged in users only) with a heading, content and category
+- Like and dislike posts - one reaction per user per post, saved on the server, with the user's own reaction highlighted
+- Read the comments on a post in a modal, and add comments when logged in
+- Logged out users who try to react or comment are sent to the login form
 
 ## Wireframe
 ![Reddit App Wireframe](./redditApp.drawio.png)
@@ -61,6 +71,44 @@ npm start
 npm install
 npm start
 ```
+7. *(Optional)* Fill the database with sample users, posts and reactions. From the `backend` folder:
+```Powershell
+npm run seed
+```
+   This creates the users `gamer_gemma`, `tech_tom` and `foodie_fran` (all with the demo password `password123`) and 12 posts across different categories. It's safe to run more than once - it removes its previous sample data first rather than duplicating it.
+
+### Running the tests
+**Frontend** (React Testing Library + Jest) - from the root folder:
+```Powershell
+npm test
+```
+
+**Backend** (Jest + Supertest against a real database) - the backend tests use a **separate** database so they never touch real data:
+1. Create a second database called `reddit_app_test`, run `backend/db/schema.sql` on it as `postgres`, then run the same `GRANT` and `ALTER DEFAULT PRIVILEGES` SQL from step 3 with `reddit_app` replaced by `reddit_app_test` in the `GRANT CONNECT` line
+2. Create `backend/.env.test` (also gitignored) - the same as `.env` but pointing at the test database:
+```
+DATABASE_URL=postgresql://reddit_app_user:choose_a_strong_password@localhost:5432/reddit_app_test
+JWT_SECRET=any_long_random_string_just_for_tests
+```
+3. From the `backend` folder:
+```Powershell
+npm test
+```
+   The tests empty every table before each test, so `backend/tests/helpers.js` refuses to run at all unless the database name ends in `_test`.
+
+## API
+All routes start with `/api`. "Token" means the request needs an `Authorization: Bearer <token>` header from signing up or logging in.
+
+| Method | Route | Token | What it does |
+|---|---|---|---|
+| `GET` | `/api/health` | No | Checks the server is running |
+| `POST` | `/api/signup` | No | Creates an account from `{ username, email, password }` and returns `{ token, user }` |
+| `POST` | `/api/login` | No | Checks `{ username, password }` and returns `{ token, user }` |
+| `GET` | `/api/posts` | Optional | Every post, newest first, with the author, like/dislike counts and (when a token is sent) the viewer's own `userReaction` |
+| `POST` | `/api/posts` | Yes | Creates a post from `{ postHeading, content, category }` - the author is taken from the token |
+| `POST` | `/api/posts/:id/reactions` | Yes | Sends `{ type: 'like' \| 'dislike' }` - adds, removes or switches the user's reaction and returns `{ likes, dislikes, userReaction }` |
+| `GET` | `/api/posts/:id/comments` | No | A post's comments, oldest first |
+| `POST` | `/api/posts/:id/comments` | Yes | Adds a comment from `{ content }` - the commenter is taken from the token |
 
 ## Technologies
 - React
@@ -72,6 +120,10 @@ npm start
 - Express
 - SQL (PostgeSQL, MySQL)
 - JWT tokens (as I already have log in state held in the front-end)
+- bcrypt (password hashing)
+- React Router
+- React Testing Library
+- Supertest (backend API tests)
 - HTML
 - CSS
 - JavaScript
@@ -88,7 +140,25 @@ Implemented error handling for:
     - clicking like then dislike removes the like and adds a dislike instead (and vice versa)
 - A user cannot add multiple likes/dislikes 
     - a second click of the button removes the like/dislike
+    - these rules now live on the server (`POST /api/posts/:id/reactions`) and are backed up by a `UNIQUE(post_id, user_id)` rule in the database, so they apply to everyone and survive a refresh
 - Every post in the feed isn't displaying the same data
+- The feed can't be loaded (backend not running, or a server error)
+    - a "Could not load posts" message with a **Try again** button, rather than a misleading "no posts" message
+    - a "Loading posts..." message while waiting, so the page never looks empty or broken
+- A logged out user tries to like, dislike or comment
+    - they're sent to the login form instead of the request failing
+- A saved token has expired or isn't a real JWT when the page is refreshed
+    - the app starts logged out instead of showing "Log out" to someone the server would reject
+- Creating a post or comment with empty fields
+    - caught in the browser before anything is sent, and checked again on the server (400)
+- A post's category isn't one of the category buttons (backend)
+    - a 400 response, so every post can always be found with the category filter
+- A request to a protected route with no token, a fake token or an expired token (backend)
+    - a 401 response from the `requireAuth` middleware
+- Someone tries to post or comment as another user (backend)
+    - any `postedBy` sent in the request is ignored - the author always comes from the verified token
+- A reaction or comment on a post that doesn't exist (backend)
+    - a 404 "Post not found" response
 - No posts/ a future API call returns nothing 
     - an intentional "no posts" message for the user so page doesn't look broken
 - Missing fields when signing up or logging in (backend)
@@ -101,6 +171,18 @@ Implemented error handling for:
     - a 500 response with a generic "Something went wrong" message; the real error is logged in the server terminal for debugging
 
 App.test.js and auth.js are annotated. Please see the listed files for further details on each individual test. 
+
+### Automated tests
+The project is built test-first (TDD): each feature starts as failing tests, then the code is written to make them pass.
+
+| Suite | Where | Tests | Covers |
+|---|---|---|---|
+| Frontend | `src/App.test.js` | 69 | Search, login/sign up/logout, staying logged in after a refresh, loading the feed, creating posts, reactions, comments, the category filter |
+| Backend | `backend/tests/posts.test.js` | 10 | Reading the feed and creating posts (including auth and validation) |
+| Backend | `backend/tests/reactions.test.js` | 15 | Adding, removing and switching reactions, and `userReaction` in the feed |
+| Backend | `backend/tests/comments.test.js` | 12 | Reading and adding comments (including auth and validation) |
+
+The frontend tests replace `fetch` with a Jest mock so they never need the backend running. The backend tests send real HTTP requests to the Express app with Supertest and run real SQL against the `reddit_app_test` database.
 
 ### Testing auth.js 
 - Started the server using `node server.js` in one terminal and left it running, then sent requests from a second terminal
@@ -149,7 +231,17 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE O
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO reddit_app_user;
 ```
 
+#### Issues found while building the rest of the app
+- **The frontend test suite wouldn't load at all** (`Cannot find module 'react-router/dom'`, then `TextEncoder is not defined`): Create React App's Jest doesn't understand React Router v7's package setup. Fixed with a `moduleNameMapper` entry in `package.json` and a `TextEncoder` polyfill in `src/setupTests.js`. Once the suite could run, it revealed 8 older tests that had been silently broken, which were then fixed
+- **`.env.test` accidentally pointed at the real database**: caught by the safety check in `backend/tests/helpers.js` before any data was deleted
+- **`Proxy error: Could not proxy request /index.css`**: a leftover `<link href="index.css">` in `public/index.html` - the styles are already bundled through `src/index.js`, so the line was removed
+- **A test that passed by accident**: a typo (`setsPostsError`) threw an error that the `catch` block turned into the expected message. Spotted by reading the code, not the test result - a reminder that a `try`/`catch` catches your own mistakes too
+
 ## Future Work
+- Make the Share link (`/post/:id`) open the post - it's copied to the clipboard but there's no route for it yet
+- Make "Most Visited" sort the feed (e.g. by total reactions) - posts can't belong to it, so it currently always shows "No posts to show yet"
+- Log the user out automatically if their token expires while the app is open
 - Get a custom domain name and use it for your application
 - Set up a CI/CD workflow to automatically deploy your application when the master branch in the repository changes
-- Make your application a progressive web app
+- Make the application a progressive web app
+- Add sample comments to the seed script
