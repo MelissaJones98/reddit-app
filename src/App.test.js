@@ -1,4 +1,5 @@
-import { render, screen, within } from '@testing-library/react'; // within limits a search to inside one element, e.g. the options of one dropdown
+import { render, screen, within, act } from '@testing-library/react'; // within limits a search to inside one element, e.g. the options of one dropdown
+// act wraps code that changes React state from outside a user action (e.g. moving a fake clock forward) so React finishes updating before the test checks the page
 import userEvent from '@testing-library/user-event'; // companion library that simulates how a real user interacts with a page: typing, clicking, tabbing, selecting etc
 import { MemoryRouter } from 'react-router-dom';
 // MemoryRouter provides React Router with the means to track the current "location" in a test environment in the same way that the window.history API does in a real browser.
@@ -663,6 +664,126 @@ test('shows logged out after a refresh when the saved token is not a valid JWT',
   );
 
   expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+// logging out automatically when the token expires ----------------------------------------------------------------------------------
+// while the app is open, App sets a timer for the token's expiry time - when it fires, the user is logged out and told why, but stays on the page
+// jest.useFakeTimers() replaces the real clock with one the test controls: jest.advanceTimersByTime(ms) jumps forward instantly instead of really waiting
+describe('session expiry', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers(); // back to the real clock for every other test
+  });
+
+  const ONE_MINUTE = 60 * 1000;
+
+  // saves a token that expires one minute from now
+  const loginExpiringInOneMinute = () => {
+    localStorage.setItem('token', makeFakeToken({ id: 1, username: 'testuser', exp: Math.floor(Date.now() / 1000) + 60 }));
+  };
+
+  const renderApp = () =>
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>
+    );
+
+  // test 1: the core behaviour
+  test('logs the user out when their token expires', async () => {
+    loginExpiringInOneMinute();
+    renderApp();
+    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(ONE_MINUTE); // the moment the token expires
+    });
+
+    expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /log out/i })).not.toBeInTheDocument();
+    expect(localStorage.getItem('token')).toBeNull();
+  });
+
+  // test 2: nothing happens early
+  test('stays logged in until the token actually expires', () => {
+    loginExpiringInOneMinute();
+    renderApp();
+
+    act(() => {
+      jest.advanceTimersByTime(ONE_MINUTE - 1000); // one second before expiry
+    });
+
+    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument();
+  });
+
+  // test 3: the user is told why, and isn't moved away from what they were reading
+  test('shows a session expired notice and keeps the user on the page', async () => {
+    loginExpiringInOneMinute();
+    mockFetchResponse(200, mockPosts); // the feed when the app loads
+    mockFetchResponse(200, mockPosts); // the feed reloading after being logged out
+    renderApp();
+    await screen.findByText('My First Post');
+
+    act(() => {
+      jest.advanceTimersByTime(ONE_MINUTE);
+    });
+
+    expect(screen.getByText(/your session has expired/i)).toBeInTheDocument();
+    expect(await screen.findByText('My First Post')).toBeInTheDocument(); // still on the feed, not sent to the login form
+  });
+
+  // test 4: the notice can be closed
+  test('the session expired notice can be dismissed', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime }); // tells user-event to use the fake clock for its own small delays
+    loginExpiringInOneMinute();
+    renderApp();
+
+    act(() => {
+      jest.advanceTimersByTime(ONE_MINUTE);
+    });
+    await user.click(screen.getByRole('button', { name: /dismiss/i }));
+
+    expect(screen.queryByText(/your session has expired/i)).not.toBeInTheDocument();
+  });
+
+  // test 5: logging out by hand cancels the timer - otherwise the "expired" notice would pop up later for no reason
+  test('logging out by hand cancels the expiry timer', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    loginExpiringInOneMinute();
+    renderApp();
+
+    await user.click(screen.getByRole('button', { name: /log out/i }));
+    act(() => {
+      jest.advanceTimersByTime(ONE_MINUTE * 2); // well past when the token would have expired
+    });
+
+    expect(screen.queryByText(/your session has expired/i)).not.toBeInTheDocument();
+  });
+
+  // test 6: logging back in clears the old notice
+  test('logging in again clears the session expired notice', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    loginExpiringInOneMinute();
+    renderApp();
+
+    act(() => {
+      jest.advanceTimersByTime(ONE_MINUTE);
+    });
+    expect(screen.getByText(/your session has expired/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /log in/i }));
+    mockFetchResponse(200, { ...mockAuthResponse, token: makeFakeToken({ id: 1, username: 'testuser', exp: Math.floor(Date.now() / 1000) + 3600 }) });
+    await user.type(screen.getByLabelText(/username/i), 'testuser');
+    await user.type(screen.getByLabelText(/password/i), 'password123');
+    await user.click(screen.getByRole('button', { name: /submit/i }));
+
+    expect(await screen.findByRole('button', { name: /log out/i })).toBeInTheDocument();
+    expect(screen.queryByText(/your session has expired/i)).not.toBeInTheDocument();
+  });
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
 

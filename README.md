@@ -28,6 +28,7 @@ my forms will need to do genuine authentication.
 ### Built so far
 - Sign up and log in with real accounts (passwords hashed with bcrypt, logins proven with a JWT that lasts 7 days)
 - Staying logged in after a page refresh, until the token expires
+- Logging out automatically the moment the token expires, with a "session expired" notice (the user stays on the page they were reading)
 - A feed of posts loaded from the database, newest first, with loading and error states and a **Try again** button
 - Search posts by heading, and filter them by category (both work together)
 - "Most Visited" shows posts from every category, ordered by total likes and dislikes
@@ -150,6 +151,8 @@ Implemented error handling for:
     - they're sent to the login form instead of the request failing
 - A saved token has expired or isn't a real JWT when the page is refreshed
     - the app starts logged out instead of showing "Log out" to someone the server would reject
+- The token expires while the app is open
+    - a timer set for the token's `exp` logs the user out at that moment and shows a dismissible notice; logging out by hand cancels the timer so the notice never appears by mistake
 - Creating a post or comment with empty fields
     - caught in the browser before anything is sent, and checked again on the server (400)
 - A post's category isn't one of the category buttons (backend)
@@ -178,7 +181,7 @@ The project is built test-first (TDD): each feature starts as failing tests, the
 
 | Suite | Where | Tests | Covers |
 |---|---|---|---|
-| Frontend | `src/App.test.js` | 74 | Search, login/sign up/logout, staying logged in after a refresh, loading the feed, creating posts, reactions, comments, the category filter, Most Visited |
+| Frontend | `src/App.test.js` | 80 | Search, login/sign up/logout, staying logged in after a refresh, logging out when the token expires, loading the feed, creating posts, reactions, comments, the category filter, Most Visited |
 | Backend | `backend/tests/posts.test.js` | 10 | Reading the feed and creating posts (including auth and validation) |
 | Backend | `backend/tests/reactions.test.js` | 15 | Adding, removing and switching reactions, and `userReaction` in the feed |
 | Backend | `backend/tests/comments.test.js` | 12 | Reading and adding comments (including auth and validation) |
@@ -240,7 +243,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO re
 
 ## Future Work
 - Make the Share link (`/post/:id`) open the post - it's copied to the clipboard but there's no route for it yet
-- Log the user out automatically if their token expires while the app is open
 - Get a custom domain name and use it for your application
 - Set up a CI/CD workflow to automatically deploy your application when the master branch in the repository changes
 - Make the application a progressive web app

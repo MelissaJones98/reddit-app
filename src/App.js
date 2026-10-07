@@ -8,20 +8,27 @@ import SignUpForm from './components/SignUpForm/SignUpForm';
 import PostFeed from './components/PostFeed/PostFeed';
 import CreatePostForm from './components/CreatePostForm/CreatePostForm';
 
-// checks whether a token saved from an earlier visit can still be used
+// reads the payload ({ id, username, iat, exp }) out of a token, or returns null if it isn't a well-formed JWT
+// used by isTokenValid (on page load) and by the expiry timer in App (while the app is open)
 // NOTE: this only reads the token, it can't verify the signature (that needs JWT_SECRET, which only the server has) - so it decides what the UI shows, the server still decides what the user is allowed to do
-function isTokenValid(token) {
-  if (!token) return false; // nothing saved - never logged in, or logged out
+function readTokenPayload(token) {
+  if (!token) return null; // nothing saved - never logged in, or logged out
 
   try {
     // a JWT is header.payload.signature - the payload is base64url encoded JSON e.g. { id, username, iat, exp }
     const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); // base64url uses - and _ where atob expects + and / (if there's no payload section, .replace throws and the catch handles it)
-    const payload = JSON.parse(atob(base64)); // atob turns base64 back into the JSON text, JSON.parse turns that into an object
-
-    return payload.exp * 1000 >= Date.now();
+    return JSON.parse(atob(base64)); // atob turns base64 back into the JSON text, JSON.parse turns that into an object
   } catch (err) {
-    return false; // anything that isn't a well-formed JWT (missing sections, bad base64, bad JSON) counts as logged out
+    return null; // anything that isn't a well-formed JWT (missing sections, bad base64, bad JSON)
   }
+}
+
+// checks whether a token saved from an earlier visit can still be used
+function isTokenValid(token) {
+  const payload = readTokenPayload(token);
+  if (!payload) return false; // missing or not a real JWT counts as logged out
+
+  return payload.exp * 1000 >= Date.now();
 }
 
 function App() {
@@ -35,12 +42,14 @@ function App() {
   const handleLoginSuccess = (data) => {
     localStorage.setItem('token', data.token); // saves the JWT so later requests (creating posts, reacting, commenting) can prove who the user is
     setIsLoggedIn(true);
+    setSessionNotice(''); // a fresh login replaces any old "session expired" message
     navigate('/'); // back to main page after login
   };
 
   const handleSignUpSuccess = (data) => {
     localStorage.setItem('token', data.token);
     setIsLoggedIn(true); // sign up logs the user in automatically
+    setSessionNotice('');
     navigate('/');
   };
 
@@ -48,6 +57,32 @@ function App() {
     localStorage.removeItem('token'); // the token is the user's proof of login, so logging out throws it away
     setIsLoggedIn(false); // flips the isLoggedIn back to false - no navigation needed as logging out doesn't move the user to a different page
   };
+
+  // logging out automatically when the token expires ----------------------------------------------------------------------------------------------
+  const [sessionNotice, setSessionNotice] = useState(''); // the "your session has expired" message, '' when there's nothing to show
+
+  // like handleLogoutClick, but also tells the user why - they stay on whatever page they were on
+  // useCallback keeps it the same function between renders, so the useEffect below doesn't restart its timer on every render
+  const handleSessionExpired = useCallback(() => {
+    localStorage.removeItem('token');
+    setIsLoggedIn(false);
+    setSessionNotice('Your session has expired. Please log in again.');
+  }, []);
+
+  // while logged in, wait until the moment the token expires, then log out
+  // re-runs whenever isLoggedIn changes - logging in starts a timer for the new token, logging out runs the cleanup that cancels it
+  useEffect(() => {
+    if (!isLoggedIn) return; // logged out - nothing to time
+
+    const payload = readTokenPayload(localStorage.getItem('token'));
+    if (!payload) return; // not a real JWT (e.g. in some tests) - nothing to time
+
+    const msUntilExpiry = payload.exp * 1000 - Date.now(); // exp is in seconds, Date.now() in milliseconds
+
+    // TODO(human): start a timer that calls handleSessionExpired after msUntilExpiry, and return a cleanup function that cancels it
+    const timerId = setTimeout(handleSessionExpired, msUntilExpiry);
+    return () => clearTimeout(timerId); // cancels the timer if login status changes to logged out
+  }, [isLoggedIn, handleSessionExpired]);
 
   // posts from the backend -----------------------------------------------------------------------------------------------------------------------
   const [posts, setPosts] = useState([]); // the feed - starts empty until the server replies
@@ -125,8 +160,15 @@ function App() {
         onSearchChange={setSearchTerm} // the state setter can be passed directly - Banner calls it with the new text
         onCreatePostClick={() => navigate('/create')}
       />
-      {/* onLoginClick and onSignUpClick are written as small inline arrow functions rather than being passed directly because navigate needs to be called with an argument 
+      {/* onLoginClick and onSignUpClick are written as small inline arrow functions rather than being passed directly because navigate needs to be called with an argument
       when the button is clicked, not run immediately during render */}
+
+      {sessionNotice && ( // only shown after an automatic logout
+        <div className="session-notice" role="status"> {/* role="status" makes screen readers announce the message when it appears */}
+          <span>{sessionNotice}</span>
+          <button className="session-notice-dismiss" aria-label="dismiss" onClick={() => setSessionNotice('')}>✕</button>
+        </div>
+      )}
 
       <Routes> {/* looks at the current URL and renders whichever route matches */}
         <Route path="/" element={homePage} />
