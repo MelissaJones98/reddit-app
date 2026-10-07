@@ -71,11 +71,11 @@ npm start
 npm install
 npm start
 ```
-7. *(Optional)* Fill the database with sample users, posts and reactions. From the `backend` folder:
+7. *(Optional)* Fill the database with sample users, posts, reactions and comments. From the `backend` folder:
 ```Powershell
 npm run seed
 ```
-   This creates the users `gamer_gemma`, `tech_tom` and `foodie_fran` (all with the demo password `password123`) and 12 posts across different categories. It's safe to run more than once - it removes its previous sample data first rather than duplicating it.
+   This creates the users `gamer_gemma`, `tech_tom` and `foodie_fran` (all with the demo password `password123`) and 12 posts across different categories, with likes, dislikes and comments. It's safe to run more than once - it removes its previous sample data first rather than duplicating it.
 
 ### Running the tests
 **Frontend** (React Testing Library + Jest) - from the root folder:
@@ -244,4 +244,3 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO re
 - Get a custom domain name and use it for your application
 - Set up a CI/CD workflow to automatically deploy your application when the master branch in the repository changes
 - Make the application a progressive web app
-- Add sample comments to the seed script

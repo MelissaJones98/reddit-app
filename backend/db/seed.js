@@ -1,4 +1,4 @@
-// fills the real reddit_app database with sample users, posts and reactions so the feed has something to show
+// fills the real reddit_app database with sample users, posts, reactions and comments so the feed has something to show
 // run it from the backend folder with:  npm run seed
 // safe to run more than once - it removes the previous sample data first, so posts are never duplicated
 const bcrypt = require('bcrypt');
@@ -38,11 +38,33 @@ const SEED_REACTIONS = [
   { user: 'gamer_gemma', heading: 'Spotted a kingfisher on my morning walk', type: 'like' },
 ];
 
+// comments: who wrote it, which post (by heading), the text, and how many minutes after the post it was written (so they read in a natural order, oldest first)
+const SEED_COMMENTS = [
+  { user: 'tech_tom', heading: 'What game are you playing this weekend?', content: 'Same remaster here! About ten hours in and loving it.', minutesAfter: 15 },
+  { user: 'foodie_fran', heading: 'What game are you playing this weekend?', content: 'Something cosy with a farm in it, as always.', minutesAfter: 40 },
+  { user: 'gamer_gemma', heading: 'What game are you playing this weekend?', content: 'A farm game is the perfect weekend choice.', minutesAfter: 55 },
+  { user: 'gamer_gemma', heading: 'Is it worth learning TypeScript before React?', content: 'I learned React first and added TypeScript later. Worked fine for me.', minutesAfter: 20 },
+  { user: 'foodie_fran', heading: 'Is it worth learning TypeScript before React?', content: 'Get comfortable with React first, the types make more sense once you know what you are typing.', minutesAfter: 45 },
+  { user: 'tech_tom', heading: 'The best homemade pizza dough recipe', content: 'Trying this tonight. Do you use bread flour or 00?', minutesAfter: 10 },
+  { user: 'foodie_fran', heading: 'The best homemade pizza dough recipe', content: '00 if you can find it, bread flour works nearly as well.', minutesAfter: 30 },
+  { user: 'gamer_gemma', heading: 'Raspberry Pi weather station build', content: 'This is brilliant. Which sensor did you use?', minutesAfter: 25 },
+  { user: 'foodie_fran', heading: 'Weekend trip to the Lake District', content: 'Catbells is a must, short climb and amazing views.', minutesAfter: 35 },
+  { user: 'tech_tom', heading: 'Easy houseplants that are hard to kill', content: 'Can confirm, my snake plant has survived three house moves.', minutesAfter: 50 },
+  { user: 'gamer_gemma', heading: 'First marathon training plan', content: 'Good luck! Slow and steady is the way.', minutesAfter: 15 },
+];
+
 async function seed() {
   // catch typos before touching the database - a post with a category no button matches could never be filtered to
   const badPost = SEED_POSTS.find((post) => !CATEGORIES.includes(post.category));
   if (badPost) {
     throw new Error(`"${badPost.heading}" has category "${badPost.category}", which isn't in constants/categories.js`);
+  }
+
+  // and every reaction and comment must point at a post heading that exists, or its post_id would be undefined
+  const headings = SEED_POSTS.map((post) => post.heading);
+  const orphan = [...SEED_REACTIONS, ...SEED_COMMENTS].find((item) => !headings.includes(item.heading));
+  if (orphan) {
+    throw new Error(`"${orphan.heading}" doesn't match any post heading in SEED_POSTS`);
   }
 
   // a transaction needs every query on the SAME connection, so take one client from the pool rather than using pool.query
@@ -66,11 +88,12 @@ async function seed() {
     }
 
     // posts - created_at is set in the past using Postgres interval maths, e.g. NOW() - 3 days
-    const postIds = {}; // heading -> id, for the reactions
+    // the extra 2 hours leaves room for comments to be timestamped after their post without any landing in the future
+    const postIds = {}; // heading -> id, for the reactions and comments
     for (const post of SEED_POSTS) {
       const result = await client.query(
         `INSERT INTO posts (user_id, heading, content, category, created_at)
-         VALUES ($1, $2, $3, $4, NOW() - make_interval(days => $5))
+         VALUES ($1, $2, $3, $4, NOW() - make_interval(days => $5, hours => 2))
          RETURNING id`,
         [userIds[post.author], post.heading, post.content, post.category, post.daysAgo]
       );
@@ -85,8 +108,17 @@ async function seed() {
       );
     }
 
+    // comments - each one is dated a few minutes after its post, read from the post's own created_at so the order is always right
+    for (const comment of SEED_COMMENTS) {
+      await client.query(
+        `INSERT INTO comments (post_id, user_id, content, created_at)
+         VALUES ($1, $2, $3, (SELECT created_at FROM posts WHERE id = $1) + make_interval(mins => $4))`,
+        [postIds[comment.heading], userIds[comment.user], comment.content, comment.minutesAfter]
+      );
+    }
+
     await client.query('COMMIT'); // everything succeeded - save it all at once
-    console.log(`Seeded ${SEED_USERS.length} users, ${SEED_POSTS.length} posts and ${SEED_REACTIONS.length} reactions.`);
+    console.log(`Seeded ${SEED_USERS.length} users, ${SEED_POSTS.length} posts, ${SEED_REACTIONS.length} reactions and ${SEED_COMMENTS.length} comments.`);
     console.log(`Log in as any of ${SEED_USERS.join(', ')} with the password "${DEMO_PASSWORD}".`);
   } catch (err) {
     await client.query('ROLLBACK'); // something failed part way - undo everything so the database isn't left half seeded
