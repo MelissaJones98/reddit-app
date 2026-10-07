@@ -2,34 +2,7 @@ import { useState } from 'react';
 import Post from '../Post/Post';
 import CategoryFilter from '../CategoryFilter/CategoryFilter';
 import './PostFeed.css';
-
-const CATEGORIES = [
-  'All',
-  'Most Visited',
-  'Internet Culture',
-  'Games',
-  'Movies & TV',
-  'Technology',
-  'Places & Travel',
-  'Pop Culture',
-  'Sports',
-  'Education & Career',
-  'Business & Finance',
-  'News & Politics',
-  'Fashion & Beauty',
-  'Vehicles',
-  'Food & Drink',
-  'Home & Garden',
-  'Music',
-  'Anime & Cosplay',
-  'Reading & Writing',
-  'Humanities & Law',
-  'Science',
-  'Art',
-  'Collectibles & Hobbies',
-  'Wellness',
-  'Nature & Outdoors',
-];
+import { FEED_CATEGORIES } from '../../constants/categories'; // shared with the Create Post form
 
 function PostFeed({ posts, searchTerm = '' }) { // searchTerm comes from App (typed into the Banner) - defaults to '' so PostFeed still works if it isn't passed
   const [activeCategory, setActiveCategory] = useState('All');
@@ -46,7 +19,7 @@ function PostFeed({ posts, searchTerm = '' }) { // searchTerm comes from App (ty
   return (
     <div className="post-feed-wrapper">
       <CategoryFilter
-        categories={CATEGORIES}
+        categories={FEED_CATEGORIES}
         activeCategory={activeCategory}
         onSelectCategory={setActiveCategory}
       />

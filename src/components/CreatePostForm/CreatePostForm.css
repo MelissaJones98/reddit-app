@@ -1,0 +1,59 @@
+/* matches the look of LoginForm and SignUpForm, but wider because posts have more to write */
+.create-post-form {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 700px; /* the same width as a post in the feed */
+  box-sizing: border-box;
+  margin: 40px auto;
+  padding: 24px;
+  background-color: #2c3136;
+  border: 1px solid #333;
+  border-radius: 0.5rem;
+}
+
+.create-post-form h2 {
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+.create-post-form label {
+  margin-top: 12px;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+}
+
+.create-post-form input,
+.create-post-form textarea,
+.create-post-form select {
+  padding: 8px;
+  border: 1px solid #444;
+  border-radius: 0.35rem;
+  background-color: #1b1e21;
+  color: aliceblue;
+  font-family: inherit; /* textareas and selects use the browser's default font otherwise */
+  font-size: 1rem;
+}
+
+.create-post-form textarea {
+  resize: vertical; /* users can make it taller, but not wider than the form */
+}
+
+.create-post-form input:focus,
+.create-post-form textarea:focus,
+.create-post-form select:focus {
+  outline: none;
+  border-color: rgb(216, 108, 8);
+}
+
+.create-post-form button {
+  margin-top: 20px;
+  padding: 10px 24px;
+  cursor: pointer;
+  align-self: center;
+}
+
+.create-post-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

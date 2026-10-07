@@ -45,5 +45,5 @@
 }
 
 .banner-auth .btn {
-  width: 80px; /* fixed width only for the Banner's Sign Up / Log In / Log Out buttons, so they stay the same size */
+  min-width: 80px; /* at least 80px so Sign Up / Log In / Log Out stay the same size - min-width (not width) lets the longer "Create Post" grow to fit its text */
 }

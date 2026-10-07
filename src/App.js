@@ -1,11 +1,12 @@
 import './App.css';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Routes, Route } from 'react-router-dom';
+import { useNavigate, Routes, Route, Navigate } from 'react-router-dom'; // Navigate (capital N) is a component that redirects as soon as it's rendered
 import Banner from './components/Banner/Banner';
 import LoginForm from './components/LoginForm/LoginForm';
 import SignUpForm from './components/SignUpForm/SignUpForm';
 import PostFeed from './components/PostFeed/PostFeed';
+import CreatePostForm from './components/CreatePostForm/CreatePostForm';
 
 // checks whether a token saved from an earlier visit can still be used
 // NOTE: this only reads the token, it can't verify the signature (that needs JWT_SECRET, which only the server has) - so it decides what the UI shows, the server still decides what the user is allowed to do
@@ -82,6 +83,16 @@ function App() {
     loadPosts();
   }, [loadPosts]);
 
+  // newPost is the post the server sent back from POST /api/posts - same shape as the posts in the feed
+  const handlePostCreated = (newPost) => {
+    const updatedPostFeed = [newPost];
+    posts.forEach( (item) => {
+      updatedPostFeed.push(item);
+    });
+    setPosts(updatedPostFeed);
+    navigate('/'); // back to the feed to see it
+  };
+
   // what to show on the home page: a loading message, an error with a way out, or the feed itself
   let homePage;
   if (isLoadingPosts) {
@@ -107,6 +118,7 @@ function App() {
         onLogoutClick={handleLogoutClick} // passed directly because it doesn't require any arguments
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm} // the state setter can be passed directly - Banner calls it with the new text
+        onCreatePostClick={() => navigate('/create')}
       />
       {/* onLoginClick and onSignUpClick are written as small inline arrow functions rather than being passed directly because navigate needs to be called with an argument 
       when the button is clicked, not run immediately during render */}
@@ -120,6 +132,14 @@ function App() {
         <Route
           path="/signup"
           element={<SignUpForm onSignUpSuccess={handleSignUpSuccess} />}
+        />
+        <Route
+          path="/create"
+          element={
+            isLoggedIn
+              ? <CreatePostForm onPostCreated={handlePostCreated} />
+              : <Navigate to="/login" replace /> // logged out users are sent to log in - replace swaps /create out of the browser history so Back doesn't bounce them here again
+          }
         />
       </Routes>
     </>

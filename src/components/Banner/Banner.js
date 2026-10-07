@@ -8,7 +8,9 @@ import logo from './logo.png';
 
 // "searchTerm" and "onSearchChange" follow the same pattern - the search text lives in App, Banner just displays it and reports each keystroke
 
-function Banner({ onSignUpClick, onLoginClick, isLoggedIn, onLogoutClick, searchTerm = '', onSearchChange }) {
+// "onCreatePostClick" - App decides where the button goes, Banner only shows it to logged in users
+
+function Banner({ onSignUpClick, onLoginClick, isLoggedIn, onLogoutClick, searchTerm = '', onSearchChange, onCreatePostClick }) {
   return (
     <header className="banner">
       <div className="banner-logo">
@@ -26,6 +28,11 @@ function Banner({ onSignUpClick, onLoginClick, isLoggedIn, onLogoutClick, search
       </div>
 
       <div className="banner-auth">
+        {isLoggedIn && ( // && renders the button only when isLoggedIn is true - logged out users can't post
+          <button className="btn" aria-label="create post" onClick={onCreatePostClick}>
+            Create Post
+          </button>
+        )}
         <button className="btn" aria-label="sign up" onClick={onSignUpClick}> {/* aria-label provides an accessible name which is read by screen readers */}
           Sign Up
         </button>

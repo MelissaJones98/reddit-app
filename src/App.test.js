@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react'; // within limits a search to inside one element, e.g. the options of one dropdown
 import userEvent from '@testing-library/user-event'; // companion library that simulates how a real user interacts with a page: typing, clicking, tabbing, selecting etc
 import { MemoryRouter } from 'react-router-dom';
 // MemoryRouter provides React Router with the means to track the current "location" in a test environment in the same way that the window.history API does in a real browser.
@@ -262,6 +262,198 @@ test('clicking Try again after an error loads the posts', async () => {
 
   expect(await screen.findByText('My First Post')).toBeInTheDocument();
   expect(screen.queryByText(/could not load posts/i)).not.toBeInTheDocument();
+});
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+// create post form -------------------------------------------------------------------------------------------------------------------
+// logged in users can write a post from the app - it's sent to POST /api/posts with their token so the server knows who wrote it
+// these tests start logged in by saving a valid token before rendering (the same trick as the "survives a refresh" tests)
+const loginBeforeRender = () => {
+  const token = makeFakeToken({ id: 1, username: 'testuser', exp: Math.floor(Date.now() / 1000) + 60 * 60 });
+  localStorage.setItem('token', token);
+  return token; // returned so tests can check it's sent to the server
+};
+
+// fills in all three fields of the form
+const fillInPost = async (user) => {
+  await user.type(screen.getByLabelText(/heading/i), 'My brand new post');
+  await user.type(screen.getByLabelText(/content/i), 'Something worth sharing');
+  await user.selectOptions(screen.getByLabelText(/category/i), 'Technology'); // selectOptions picks an option in a <select>, like a user choosing from the dropdown
+};
+
+// what POST /api/posts sends back when a post is created (matches routes/posts.js)
+const mockCreatedPost = {
+  id: 99,
+  postedBy: 'testuser',
+  postHeading: 'My brand new post',
+  content: 'Something worth sharing',
+  category: 'Technology',
+  likes: 0,
+  dislikes: 0,
+};
+
+// test 1: only logged in users see the button - logged out users can't post, so offering it would only lead to an error
+test('the Create Post button only shows when logged in', () => {
+  const { unmount } = render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+  expect(screen.queryByRole('button', { name: /create post/i })).not.toBeInTheDocument();
+  unmount(); // removes the first App so the second render starts clean
+
+  loginBeforeRender();
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+  expect(screen.getByRole('button', { name: /create post/i })).toBeInTheDocument();
+});
+
+// test 2: the button opens the form
+test('clicking Create Post opens the create post form', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  await user.click(screen.getByRole('button', { name: /create post/i }));
+
+  expect(screen.getByRole('heading', { name: /create a post/i })).toBeInTheDocument();
+  expect(screen.getByLabelText(/heading/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/content/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/category/i)).toBeInTheDocument();
+});
+
+// test 3: the dropdown offers real topics only - 'All' and 'Most Visited' are feed views, and the server would reject them
+test('the category dropdown lists post categories but not All or Most Visited', () => {
+  loginBeforeRender();
+  render(
+    <MemoryRouter initialEntries={['/create']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  const dropdown = screen.getByLabelText(/category/i);
+  expect(within(dropdown).getByRole('option', { name: 'Technology' })).toBeInTheDocument();
+  expect(within(dropdown).getByRole('option', { name: 'Nature & Outdoors' })).toBeInTheDocument();
+  expect(within(dropdown).queryByRole('option', { name: 'All' })).not.toBeInTheDocument();
+  expect(within(dropdown).queryByRole('option', { name: 'Most Visited' })).not.toBeInTheDocument();
+});
+
+// test 4: the request matches what routes/posts.js and requireAuth expect
+test('submitting sends the post and the token to /api/posts', async () => {
+  const user = userEvent.setup();
+  const token = loginBeforeRender();
+  render(
+    <MemoryRouter initialEntries={['/create']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  mockFetchResponse(201, mockCreatedPost);
+  await fillInPost(user);
+  await user.click(screen.getByRole('button', { name: /^post$/i }));
+
+  expect(global.fetch).toHaveBeenCalledWith('/api/posts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`, // the format requireAuth reads: "Bearer " then the token
+    },
+    body: JSON.stringify({ postHeading: 'My brand new post', content: 'Something worth sharing', category: 'Technology' }),
+  });
+});
+
+// test 5: after posting, the user lands back on the feed and their post is at the top - without reloading the whole feed
+test('after creating a post the feed shows it at the top', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  mockFetchResponse(200, mockPosts); // the feed App loads first
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  await screen.findByText('My First Post'); // wait for the feed to load
+  await user.click(screen.getByRole('button', { name: /create post/i }));
+
+  mockFetchResponse(201, mockCreatedPost);
+  await fillInPost(user);
+  await user.click(screen.getByRole('button', { name: /^post$/i }));
+
+  const headings = await screen.findAllByText(/My brand new post|My First Post|A Second Post/); // all three post headings, in the order they appear on the page
+  expect(headings.map((heading) => heading.textContent)).toEqual(['My brand new post', 'My First Post', 'A Second Post']);
+});
+
+// test 6: empty fields are caught in the browser - no point sending a request the server will reject
+test('shows an error and sends nothing when fields are empty', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  render(
+    <MemoryRouter initialEntries={['/create']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  await user.type(screen.getByLabelText(/heading/i), 'Only a heading');
+  await user.click(screen.getByRole('button', { name: /^post$/i }));
+
+  expect(screen.getByText(/please fill in/i)).toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalledWith('/api/posts', expect.objectContaining({ method: 'POST' }));
+});
+
+// test 7: the server rejects the post (e.g. 401 because the token expired) - its message is shown and the form stays open
+test('shows the server\'s error when the post is rejected', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  render(
+    <MemoryRouter initialEntries={['/create']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  mockFetchResponse(401, { error: 'Your session has expired, please log in again' });
+  await fillInPost(user);
+  await user.click(screen.getByRole('button', { name: /^post$/i }));
+
+  expect(await screen.findByText(/your session has expired/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/heading/i)).toHaveValue('My brand new post'); // what they typed isn't lost
+});
+
+// test 8: the server can't be reached
+test('shows an error when the server cannot be reached while posting', async () => {
+  const user = userEvent.setup();
+  loginBeforeRender();
+  render(
+    <MemoryRouter initialEntries={['/create']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  global.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  await fillInPost(user);
+  await user.click(screen.getByRole('button', { name: /^post$/i }));
+
+  expect(await screen.findByText(/could not connect to the server/i)).toBeInTheDocument();
+});
+
+// test 9: logged out users who go straight to /create (e.g. a bookmark) are sent to the login form instead
+test('visiting /create while logged out shows the login form', () => {
+  render(
+    <MemoryRouter initialEntries={['/create']}>
+      <App />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByRole('heading', { name: /log in/i })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: /create a post/i })).not.toBeInTheDocument();
 });
 // -----------------------------------------------------------------------------------------------------------------------------------
 
